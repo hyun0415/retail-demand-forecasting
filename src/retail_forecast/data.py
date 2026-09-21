@@ -38,6 +38,7 @@ def load_favorita_data(raw_path: str | Path) -> FavoritaData:
     sales = pd.read_csv(
         raw_path / "train.csv",
         parse_dates=["date"],
+        usecols=["date", "store_nbr", "family", "sales", "onpromotion"],
         dtype={
             "store_nbr": "int16",
             "family": "category",
@@ -47,10 +48,24 @@ def load_favorita_data(raw_path: str | Path) -> FavoritaData:
     )
     stores = pd.read_csv(
         raw_path / "stores.csv",
-        dtype={"store_nbr": "int16", "cluster": "int8"},
+        dtype={
+            "store_nbr": "int16",
+            "city": "category",
+            "state": "category",
+            "type": "category",
+            "cluster": "int8",
+        },
     )
-    oil = pd.read_csv(raw_path / "oil.csv", parse_dates=["date"])
-    holidays = pd.read_csv(raw_path / "holidays_events.csv", parse_dates=["date"])
+    oil = pd.read_csv(
+        raw_path / "oil.csv",
+        parse_dates=["date"],
+        dtype={"dcoilwtico": "float32"},
+    )
+    holidays = pd.read_csv(
+        raw_path / "holidays_events.csv",
+        parse_dates=["date"],
+        dtype={"type": "category", "locale": "category", "transferred": "bool"},
+    )
     transactions = pd.read_csv(
         raw_path / "transactions.csv",
         parse_dates=["date"],
@@ -58,4 +73,3 @@ def load_favorita_data(raw_path: str | Path) -> FavoritaData:
     )
 
     return FavoritaData(sales, stores, oil, holidays, transactions)
-

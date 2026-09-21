@@ -65,4 +65,3 @@ def test_temporal_split_has_no_date_overlap() -> None:
 
     assert train["target_date"].max() < cutoff
     assert valid["target_date"].min() >= cutoff
-
