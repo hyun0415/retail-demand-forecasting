@@ -64,6 +64,7 @@ python -m venv .venv
 pip install -r requirements.txt
 pip install -e .
 python scripts/run_experiment.py --config configs/baseline.toml
+python scripts/run_permutation_importance.py --config configs/baseline.toml
 ```
 
 To use CatBoost, change `model = "lightgbm"` to `model = "catboost"` in the configuration file.
@@ -74,6 +75,7 @@ Generated artifacts:
 - `outputs/metrics.json`
 - `outputs/validation_predictions.csv`
 - `outputs/feature_importance.csv`
+- `outputs/permutation_importance.csv`
 
 ## First baseline result
 

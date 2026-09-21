@@ -1,5 +1,10 @@
 import argparse
 import json
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from retail_forecast.config import load_config
 from retail_forecast.pipeline import run_experiment
@@ -20,4 +25,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

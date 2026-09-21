@@ -60,6 +60,7 @@ python -m venv .venv
 pip install -r requirements.txt
 pip install -e .
 python scripts/run_experiment.py --config configs/baseline.toml
+python scripts/run_permutation_importance.py --config configs/baseline.toml
 ```
 
 CatBoost를 사용하려면 `configs/baseline.toml`의 `model`을 `catboost`로 바꿉니다.
@@ -70,6 +71,7 @@ CatBoost를 사용하려면 `configs/baseline.toml`의 `model`을 `catboost`로 
 - `outputs/metrics.json`
 - `outputs/validation_predictions.csv`
 - `outputs/feature_importance.csv`
+- `outputs/permutation_importance.csv`
 
 ## 첫 기준 실험 결과
 
