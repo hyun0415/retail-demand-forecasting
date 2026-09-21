@@ -52,6 +52,7 @@ models/                  Trained models, not tracked
 outputs/                 Metrics and validation results, not tracked
 scripts/run_experiment.py
 src/retail_forecast/     Data, features, models, and pipeline
+notebooks/                EDA and model error analysis
 tests/                   Leakage and metric tests
 ```
 

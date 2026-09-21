@@ -48,6 +48,7 @@ models/                  학습 모델, Git 제외
 outputs/                 지표와 검증 결과, Git 제외
 scripts/run_experiment.py
 src/retail_forecast/     데이터·변수·모델·실험 코드
+notebooks/                EDA와 모델 오차 분석
 tests/                   데이터 누수와 지표 검증
 ```
 
