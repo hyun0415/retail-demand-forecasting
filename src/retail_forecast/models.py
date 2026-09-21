@@ -17,7 +17,8 @@ def fit_lightgbm(
     model.fit(
         train_x,
         train_y,
-        eval_set=[(valid_x, valid_y)],
+        eval_X=valid_x,
+        eval_y=valid_y,
         eval_metric="l1",
         callbacks=[early_stopping(100, verbose=False)],
     )
@@ -73,4 +74,3 @@ def fit_model(
         )
 
     raise ValueError(f"Unsupported model: {model_name}")
-

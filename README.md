@@ -74,6 +74,17 @@ Generated artifacts:
 - `outputs/validation_predictions.csv`
 - `outputs/feature_importance.csv`
 
+## First baseline result
+
+The first full-data run used 2,831,598 training rows and 49,896 validation rows. Validation covered the latest 28 target dates beginning on July 19, 2017.
+
+| Model | RMSLE | MAE |
+|---|---:|---:|
+| Seven-day seasonal naive | 0.5468 | 86.93 |
+| LightGBM | **0.4079** | **66.58** |
+
+LightGBM reduced RMSLE by 25.4% and MAE by 23.4% relative to the seasonal baseline. These figures establish the initial benchmark; family-level errors and temporal stability still require further analysis.
+
 ## Scope
 
 The first version focuses on reproducible forecasting and leakage-safe validation. API serving, monitoring, orchestration, and TabFM are intentionally deferred. TabFM can later be evaluated as a zero-shot comparison on the same engineered table without changing the main experiment.

@@ -1,7 +1,9 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .venv/
+.uv-cache/
 .idea/
 .vscode/
 
@@ -18,4 +20,3 @@ catboost_info/
 *.log
 *.7z
 *.zip
-
