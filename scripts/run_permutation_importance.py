@@ -11,14 +11,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from retail_forecast.config import load_config
-from retail_forecast.data import load_favorita_data
 from retail_forecast.features import (
-    build_feature_table,
     get_categorical_columns,
     get_feature_columns,
     prepare_model_frame,
 )
-from retail_forecast.pipeline import temporal_split
+from retail_forecast.pipeline import load_or_build_feature_table, temporal_split
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,13 +36,7 @@ def negative_rmsle(model, features, target) -> float:
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    data = load_favorita_data(config.raw_path)
-    frame = build_feature_table(
-        data,
-        config.forecast_horizon,
-        config.lags,
-        config.rolling_windows,
-    )
+    frame = load_or_build_feature_table(config)
     _, valid, _ = temporal_split(frame, config.validation_days)
     sample = valid.sample(min(args.sample_size, len(valid)), random_state=config.random_state)
     feature_columns = get_feature_columns(frame)
@@ -55,7 +47,8 @@ def main() -> None:
         categorical_columns,
         config.model,
     )
-    model = joblib.load(config.model_path / f"{config.model}_h{config.forecast_horizon}.joblib")
+    horizon_label = f"h{min(config.forecast_horizons)}-h{max(config.forecast_horizons)}"
+    model = joblib.load(config.model_path / f"{config.model}_{horizon_label}.joblib")
     result = permutation_importance(
         model,
         sample_x,

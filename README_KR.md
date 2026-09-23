@@ -1,20 +1,23 @@
 # Favorita 유통 수요예측
 
-Favorita의 점포·상품군별 판매량을 7일 전에 예측하는 프로젝트입니다. 단순한 대회 점수보다 재고와 프로모션 계획에 활용할 수 있는 예측 절차를 만드는 데 목적을 두었습니다.
+Favorita의 점포·상품군별 향후 1~7일 일별 판매량을 예측하는 프로젝트입니다. 단순한 대회 점수보다 상품군별 보충·프로모션 계획의 의사결정을 지원하는 데 목적을 두었습니다.
 
 [English README](README.md)
 
 ## 문제 정의
 
 - **예측 단위:** 점포 × 상품군 × 목표일
-- **예측값:** 7일 뒤의 0 이상 판매량
+- **예측값:** 기준일 다음 날부터 7일 뒤까지의 0 이상 일별 판매량
 - **주 모델:** LightGBM
 - **비교 모델:** CatBoost
-- **기준 모델:** 같은 점포·상품군의 7일 전 판매량
-- **검증:** 가장 최근 28개 목표일을 시간순으로 분리
-- **평가지표:** RMSLE와 MAE
+- **모델 구조:** `forecast_horizon=1~7`을 입력받는 통합 글로벌 모델 1개
+- **기준 모델:** 직전 주 일별 패턴과 동일 요일 최근 4주 평균
+- **검증:** 최근 28개 예측 기준일을 분리하고, 검증 시작일 이후의 정답은 학습에서 제외
+- **평가지표:** RMSLE, MAE, WAPE, Bias
 
-기준일 `t`까지 확인 가능한 정보로 `t + 7`의 판매량을 예측합니다. 목표일의 정보 중에서는 사전에 정해지는 프로모션과 달력 정보만 사용합니다.
+기준일 `t`까지 확인 가능한 판매 이력을 공통으로 사용하고, `forecast_horizon`을 1~7로 바꿔 `t+1`부터 `t+7`까지 각각 예측합니다. 목표일 정보 중에서는 사전에 정해지는 프로모션·요일·공휴일만 사용합니다. 결과는 일별로 확인하거나 상품군의 보충 주기에 맞춰 1~3일 또는 1~7일 합계로 활용할 수 있습니다.
+
+전체 원본으로 Lag와 이동평균을 계산한 뒤 최근 365개 예측 기준일만 1~7일 Horizon으로 확장합니다. 생성된 학습 Feature는 `data/processed`에 Parquet으로 저장하여 모델 비교와 재실행에서 재사용합니다.
 
 ## 데이터 준비
 
@@ -23,7 +26,6 @@ Kaggle의 [Store Sales - Time Series Forecasting](https://www.kaggle.com/competi
 ```text
 train.csv
 stores.csv
-oil.csv
 holidays_events.csv
 transactions.csv
 ```
@@ -32,12 +34,14 @@ transactions.csv
 
 ## 분석 방식
 
-- 1·7·14·28·56일 전 판매량
-- 과거 7·14·28일 평균 판매량
-- 목표일의 프로모션과 달력 정보
-- 점포·상품군·거래량·유가·공휴일·이벤트 정보
+- **최근 수요:** 기준일 판매량, 1·7·14·28·56일 전 판매량
+- **수요 수준:** 과거 7·14·28일 이동평균
+- **주간 주기:** 목표일과 같은 요일의 직전 주 판매량 및 최근 4주 평균
+- **예측 거리:** 목표일까지 남은 `forecast_horizon` 1~7
+- **미래 확정 정보:** 목표일의 프로모션·요일·월·공휴일·이벤트
+- **기준일 정보:** 점포·상품군·기준일 거래량
 
-이동평균은 반드시 하루 이상 이전의 판매량으로 계산합니다. 7일 뒤의 정답도 단순 행 이동이 아니라 실제 날짜와 점포·상품군을 기준으로 결합해 누락된 날짜로 인한 오류를 방지했습니다.
+이동평균은 반드시 하루 이상 이전의 판매량으로 계산합니다. 목표값도 단순 행 이동이 아니라 실제 날짜와 점포·상품군을 기준으로 결합해 누락된 날짜로 인한 오류를 방지했습니다. 유가는 수요와의 관계를 명확히 설명하기 어려워 모델에서 제외했습니다.
 
 ## 폴더 구성
 
@@ -48,7 +52,11 @@ models/                  학습 모델, Git 제외
 outputs/                 지표와 검증 결과, Git 제외
 scripts/run_experiment.py
 src/retail_forecast/     데이터·변수·모델·실험 코드
-notebooks/                EDA와 모델 오차 분석
+notebooks/01_eda.ipynb
+notebooks/03_baseline_model.ipynb
+notebooks/04_feature_engineering.ipynb
+notebooks/05_model_comparison.ipynb
+notebooks/06_error_analysis.ipynb
 tests/                   데이터 누수와 지표 검증
 ```
 
@@ -60,20 +68,64 @@ python -m venv .venv
 pip install -r requirements.txt
 pip install -e .
 python scripts/run_experiment.py --config configs/baseline.toml
+python scripts/run_experiment.py --config configs/catboost.toml
 python scripts/run_permutation_importance.py --config configs/baseline.toml
 ```
 
-CatBoost를 사용하려면 `configs/baseline.toml`의 `model`을 `catboost`로 바꿉니다.
+변수 정의나 학습기간을 변경해 Parquet을 새로 만들 때만 다음 옵션을 사용합니다.
+
+```bash
+python scripts/run_experiment.py --config configs/baseline.toml --rebuild-features
+```
+
+로컬 CPU에서는 `configs/catboost.toml`, NVIDIA GPU에서는
+`configs/catboost_gpu.toml`을 사용합니다.
+
+## Colab GPU 실행
+
+Colab에는 Git으로 추적하지 않는 다음 Feature 파일을 별도로 배치해야 합니다.
+
+```text
+data/processed/features_h1-7_d365_l1-7-14-28-56_r7-14-28.parquet
+```
+
+이 파일은 원본 데이터에서 생성한 최근 365개 예측 기준일의 1~7일 통합 학습
+테이블입니다. 파일이 있으면 원본 CSV와 `--rebuild-features` 옵션은 필요하지
+않습니다.
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+python scripts/run_experiment.py --config configs/catboost_gpu.toml
+```
+
+Colab 런타임은 종료될 수 있으므로 완료 후 `models`와 `outputs`의 결과를
+Google Drive 또는 로컬 컴퓨터로 복사합니다. GPU 학습은 부동소수점 연산
+순서로 인해 같은 시드에서도 결과가 소폭 달라질 수 있습니다.
 
 실행 결과는 다음과 같이 저장됩니다.
 
-- `models/<모델명>_h7.joblib`
-- `outputs/metrics.json`
-- `outputs/validation_predictions.csv`
-- `outputs/feature_importance.csv`
+- `models/<모델명>_h1-h7.joblib`
+- `outputs/metrics_<모델명>.json`
+- `outputs/metrics_by_horizon_<모델명>.csv`
+- `outputs/validation_predictions_<모델명>.csv`
+- `outputs/decision_summary_<모델명>.csv` (`h1~h7` 일별 예측과 1~3일·1~7일 합계)
+- `outputs/feature_importance_<모델명>.csv`
 - `outputs/permutation_importance.csv`
 
-## 첫 기준 실험 결과
+## 현재 1~7일 통합 모델 결과
+
+최근 365개 예측 기준일로 학습하고 최근 28개 기준일을 검증한 결과입니다.
+
+| 모델 | RMSLE | MAE | WAPE | Bias |
+|---|---:|---:|---:|---:|
+| 직전 주 동일 요일 | 0.5430 | 85.09 | 17.96% | 0.91% |
+| 동일 요일 최근 4주 평균 | 0.4617 | 69.92 | 14.76% | 0.83% |
+| LightGBM | **0.3943** | **62.84** | **13.26%** | **-0.86%** |
+
+Bias가 음수이면 전체적으로 과소 예측하고, 양수이면 과대 예측한다는 뜻입니다.
+
+## 이전 단일 7일 예측 기준 실험
 
 전체 데이터 중 2,831,598행을 학습하고 최근 28일에 해당하는 49,896행을 검증했습니다. 검증 목표일은 2017년 7월 19일부터 시작합니다.
 
@@ -82,7 +134,7 @@ CatBoost를 사용하려면 `configs/baseline.toml`의 `model`을 `catboost`로 
 | 7일 계절 기준선 | 0.5468 | 86.93 |
 | LightGBM | **0.4079** | **66.58** |
 
-LightGBM은 계절 기준선보다 RMSLE를 25.4%, MAE를 23.4% 낮췄습니다. 이는 첫 기준 성능이며, 상품군별 오차와 기간에 따른 안정성은 후속 분석에서 추가로 확인합니다.
+LightGBM은 계절 기준선보다 RMSLE를 25.4%, MAE를 23.4% 낮췄습니다. 이 수치는 이전 `t+7` 단일 목표 실험 결과이므로 새 1~7일 통합 모델의 성능과 직접 비교하지 않습니다. 통합 모델 실행 후 전체 지표와 예측 거리별 지표를 새로 기록합니다.
 
 ## 현재 범위
 

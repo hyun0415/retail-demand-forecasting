@@ -7,7 +7,6 @@ import pandas as pd
 REQUIRED_FILES = (
     "train.csv",
     "stores.csv",
-    "oil.csv",
     "holidays_events.csv",
     "transactions.csv",
 )
@@ -17,7 +16,6 @@ REQUIRED_FILES = (
 class FavoritaData:
     sales: pd.DataFrame
     stores: pd.DataFrame
-    oil: pd.DataFrame
     holidays: pd.DataFrame
     transactions: pd.DataFrame
 
@@ -56,11 +54,6 @@ def load_favorita_data(raw_path: str | Path) -> FavoritaData:
             "cluster": "int8",
         },
     )
-    oil = pd.read_csv(
-        raw_path / "oil.csv",
-        parse_dates=["date"],
-        dtype={"dcoilwtico": "float32"},
-    )
     holidays = pd.read_csv(
         raw_path / "holidays_events.csv",
         parse_dates=["date"],
@@ -72,4 +65,4 @@ def load_favorita_data(raw_path: str | Path) -> FavoritaData:
         dtype={"store_nbr": "int16", "transactions": "int32"},
     )
 
-    return FavoritaData(sales, stores, oil, holidays, transactions)
+    return FavoritaData(sales, stores, holidays, transactions)

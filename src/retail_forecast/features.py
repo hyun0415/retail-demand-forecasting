@@ -5,7 +5,12 @@ from retail_forecast.data import FavoritaData
 
 
 KEY_COLUMNS = ["store_nbr", "family"]
-NON_FEATURE_COLUMNS = ["date", "target_date", "target_sales"]
+NON_FEATURE_COLUMNS = [
+    "date",
+    "target_date",
+    "seasonal_reference_date",
+    "target_sales",
+]
 
 
 def add_sales_history(
@@ -35,7 +40,11 @@ def add_sales_history(
     return frame
 
 
-def add_future_target(frame: pd.DataFrame, horizon: int) -> pd.DataFrame:
+def add_future_targets(
+    frame: pd.DataFrame,
+    horizons: tuple[int, ...],
+    origin_days: int | None = None,
+) -> pd.DataFrame:
     labels = frame[KEY_COLUMNS + ["date", "sales", "onpromotion"]].rename(
         columns={
             "date": "target_date",
@@ -43,10 +52,48 @@ def add_future_target(frame: pd.DataFrame, horizon: int) -> pd.DataFrame:
             "onpromotion": "target_onpromotion",
         }
     )
-    frame = frame.copy()
-    frame["target_date"] = frame["date"] + pd.Timedelta(days=horizon)
+    max_horizon = max(horizons)
+    last_complete_origin = frame["date"].max() - pd.Timedelta(days=max_horizon)
+    origins = frame.loc[frame["date"].le(last_complete_origin)].copy()
+    if origin_days is not None:
+        first_origin = last_complete_origin - pd.Timedelta(days=origin_days - 1)
+        origins = origins.loc[origins["date"].ge(first_origin)].copy()
+    targets = []
 
-    return frame.merge(labels, on=KEY_COLUMNS + ["target_date"], how="left")
+    for horizon in horizons:
+        horizon_frame = origins.copy()
+        horizon_frame["forecast_horizon"] = np.int8(horizon)
+        horizon_frame["target_date"] = horizon_frame["date"] + pd.Timedelta(days=horizon)
+        targets.append(
+            horizon_frame.merge(labels, on=KEY_COLUMNS + ["target_date"], how="left")
+        )
+
+    result = pd.concat(targets, ignore_index=True)
+    seasonal_columns = []
+
+    for week in range(1, 5):
+        reference_column = f"seasonal_reference_date_{week}w"
+        sales_column = f"sales_same_weekday_{week}w"
+        seasonal_columns.append(sales_column)
+        result[reference_column] = result["target_date"] - pd.Timedelta(days=7 * week)
+        seasonal = frame[KEY_COLUMNS + ["date", "sales"]].rename(
+            columns={"date": reference_column, "sales": sales_column}
+        )
+        result = result.merge(
+            seasonal,
+            on=KEY_COLUMNS + [reference_column],
+            how="left",
+        )
+
+    result["seasonal_reference_date"] = result["seasonal_reference_date_1w"]
+    result["sales_same_weekday_last_week"] = result["sales_same_weekday_1w"]
+    result["sales_same_weekday_4w_mean"] = result[seasonal_columns].mean(axis=1)
+    temporary_columns = [
+        *(f"seasonal_reference_date_{week}w" for week in range(1, 5)),
+        *seasonal_columns,
+    ]
+
+    return result.drop(columns=temporary_columns)
 
 
 def build_store_holidays(
@@ -84,10 +131,6 @@ def build_store_holidays(
 
 
 def add_external_features(frame: pd.DataFrame, data: FavoritaData) -> pd.DataFrame:
-    oil = data.oil.sort_values("date").copy()
-    oil["dcoilwtico"] = oil["dcoilwtico"].interpolate().bfill().ffill()
-    oil = oil.rename(columns={"date": "target_date", "dcoilwtico": "target_oil_price"})
-
     transactions = data.transactions.rename(
         columns={"transactions": "current_transactions"}
     )
@@ -95,7 +138,6 @@ def add_external_features(frame: pd.DataFrame, data: FavoritaData) -> pd.DataFra
 
     frame = frame.merge(data.stores, on="store_nbr", how="left")
     frame = frame.merge(transactions, on=["store_nbr", "date"], how="left")
-    frame = frame.merge(oil, on="target_date", how="left")
     frame = frame.merge(holidays, on=["store_nbr", "target_date"], how="left")
 
     frame["target_year"] = frame["target_date"].dt.year.astype("int16")
@@ -113,14 +155,22 @@ def add_external_features(frame: pd.DataFrame, data: FavoritaData) -> pd.DataFra
 
 def build_feature_table(
     data: FavoritaData,
-    horizon: int,
+    horizons: tuple[int, ...],
     lags: tuple[int, ...],
     rolling_windows: tuple[int, ...],
+    origin_days: int | None = None,
 ) -> pd.DataFrame:
     frame = add_sales_history(data.sales, lags, rolling_windows)
-    frame = add_future_target(frame, horizon)
+    frame = add_future_targets(frame, horizons, origin_days)
     frame = add_external_features(frame, data)
-    frame = frame.dropna(subset=["target_sales", *(f"sales_lag_{lag}" for lag in lags)])
+    frame = frame.dropna(
+        subset=[
+            "target_sales",
+            "sales_same_weekday_last_week",
+            "sales_same_weekday_4w_mean",
+            *(f"sales_lag_{lag}" for lag in lags),
+        ]
+    )
     frame["target_sales"] = frame["target_sales"].clip(lower=0).astype("float32")
 
     return frame.reset_index(drop=True)
@@ -152,4 +202,3 @@ def prepare_model_frame(
     features[numeric_columns] = features[numeric_columns].replace([np.inf, -np.inf], np.nan)
 
     return features
-

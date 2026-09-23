@@ -1,4 +1,4 @@
-model = "lightgbm"
+model = "catboost"
 forecast_horizons = [1, 2, 3, 4, 5, 6, 7]
 training_origin_days = 365
 validation_days = 28
@@ -12,26 +12,13 @@ processed = "data/processed"
 model = "models"
 output = "outputs"
 
-[lightgbm]
-objective = "regression_l1"
-n_estimators = 1200
-learning_rate = 0.04
-num_leaves = 63
-max_depth = -1
-min_child_samples = 40
-subsample = 0.8
-colsample_bytree = 0.8
-reg_alpha = 0.1
-reg_lambda = 0.2
-n_jobs = -1
-force_row_wise = true
-verbosity = -1
-
 [catboost]
 loss_function = "MAE"
 iterations = 1200
 learning_rate = 0.04
 depth = 8
 l2_leaf_reg = 5.0
+task_type = "GPU"
+devices = "0"
 allow_writing_files = false
-verbose = false
+verbose = 50

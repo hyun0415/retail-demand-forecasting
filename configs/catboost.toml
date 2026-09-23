@@ -1,4 +1,4 @@
-model = "lightgbm"
+model = "catboost"
 forecast_horizons = [1, 2, 3, 4, 5, 6, 7]
 training_origin_days = 365
 validation_days = 28
