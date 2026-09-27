@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from retail_forecast.data import FavoritaData
-from retail_forecast.features import build_feature_table
+from retail_forecast.features import add_sales_history, build_feature_table
 from retail_forecast.pipeline import build_decision_summary, temporal_split
 
 
@@ -110,6 +110,27 @@ def test_origin_window_is_applied_before_horizon_expansion() -> None:
 
     assert frame["date"].nunique() == 10
     assert frame["date"].max() - frame["date"].min() == pd.Timedelta(days=9)
+
+
+def test_date_chunked_features_match_full_build() -> None:
+    data = make_sample_data()
+    history = add_sales_history(data.sales, (1, 7), (7,))
+    full = build_feature_table(data, (1, 7), (1, 7), (7,), history_frame=history)
+    chunks = [
+        build_feature_table(
+            data, (1, 7), (1, 7), (7,), history_frame=history,
+            origin_start=start, origin_end=end,
+        )
+        for start, end in [
+            (pd.Timestamp("2026-01-01"), pd.Timestamp("2026-02-01")),
+            (pd.Timestamp("2026-02-02"), pd.Timestamp("2026-03-05")),
+        ]
+    ]
+    columns = ["date", "store_nbr", "family", "forecast_horizon", "target_sales", "sales_same_weekday_4w_mean"]
+    order = ["date", "store_nbr", "family", "forecast_horizon"]
+    expected = full[columns].sort_values(order).reset_index(drop=True)
+    actual = pd.concat(chunks)[columns].sort_values(order).reset_index(drop=True)
+    pd.testing.assert_frame_equal(actual, expected)
 
 
 def test_decision_summary_aggregates_daily_forecasts() -> None:

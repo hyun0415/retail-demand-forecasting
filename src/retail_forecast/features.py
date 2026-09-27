@@ -44,6 +44,8 @@ def add_future_targets(
     frame: pd.DataFrame,
     horizons: tuple[int, ...],
     origin_days: int | None = None,
+    origin_start: pd.Timestamp | None = None,
+    origin_end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     labels = frame[KEY_COLUMNS + ["date", "sales", "onpromotion"]].rename(
         columns={
@@ -58,6 +60,16 @@ def add_future_targets(
     if origin_days is not None:
         first_origin = last_complete_origin - pd.Timedelta(days=origin_days - 1)
         origins = origins.loc[origins["date"].ge(first_origin)].copy()
+    if origin_start is not None:
+        origins = origins.loc[origins["date"].ge(origin_start)].copy()
+    if origin_end is not None:
+        origins = origins.loc[origins["date"].le(origin_end)].copy()
+    labels = labels.loc[
+        labels["target_date"].between(
+            origins["date"].min() + pd.Timedelta(days=min(horizons)),
+            origins["date"].max() + pd.Timedelta(days=max_horizon),
+        )
+    ]
     targets = []
 
     for horizon in horizons:
@@ -76,7 +88,13 @@ def add_future_targets(
         sales_column = f"sales_same_weekday_{week}w"
         seasonal_columns.append(sales_column)
         result[reference_column] = result["target_date"] - pd.Timedelta(days=7 * week)
-        seasonal = frame[KEY_COLUMNS + ["date", "sales"]].rename(
+        seasonal_history = frame.loc[
+            frame["date"].between(
+                result[reference_column].min(), result[reference_column].max()
+            ),
+            KEY_COLUMNS + ["date", "sales"],
+        ]
+        seasonal = seasonal_history.rename(
             columns={"date": reference_column, "sales": sales_column}
         )
         result = result.merge(
@@ -159,9 +177,12 @@ def build_feature_table(
     lags: tuple[int, ...],
     rolling_windows: tuple[int, ...],
     origin_days: int | None = None,
+    history_frame: pd.DataFrame | None = None,
+    origin_start: pd.Timestamp | None = None,
+    origin_end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    frame = add_sales_history(data.sales, lags, rolling_windows)
-    frame = add_future_targets(frame, horizons, origin_days)
+    frame = history_frame if history_frame is not None else add_sales_history(data.sales, lags, rolling_windows)
+    frame = add_future_targets(frame, horizons, origin_days, origin_start, origin_end)
     frame = add_external_features(frame, data)
     frame = frame.dropna(
         subset=[

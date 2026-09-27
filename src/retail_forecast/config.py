@@ -17,6 +17,7 @@ class ExperimentConfig:
     model_path: Path
     output_path: Path
     model_params: dict
+    excluded_features: tuple[str, ...] = ()
 
 
 def load_config(path: str | Path) -> ExperimentConfig:
@@ -42,4 +43,5 @@ def load_config(path: str | Path) -> ExperimentConfig:
         model_path=project_root / paths["model"],
         output_path=project_root / paths["output"],
         model_params=values[model_name],
+        excluded_features=tuple(values.get("excluded_features", ())),
     )

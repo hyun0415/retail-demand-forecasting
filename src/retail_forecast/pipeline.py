@@ -22,7 +22,7 @@ def feature_cache_path(config: ExperimentConfig) -> Path:
     lag_label = "-".join(map(str, config.lags))
     rolling_label = "-".join(map(str, config.rolling_windows))
     filename = (
-        f"features_{horizon_label}_d{config.training_origin_days}"
+        f"features_{horizon_label}_d{'all' if config.training_origin_days == 0 else config.training_origin_days}"
         f"_l{lag_label}_r{rolling_label}.parquet"
     )
 
@@ -43,7 +43,7 @@ def load_or_build_feature_table(
         config.forecast_horizons,
         config.lags,
         config.rolling_windows,
-        config.training_origin_days,
+        config.training_origin_days or None,
     )
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(cache_path, index=False)
@@ -87,16 +87,16 @@ def build_decision_summary(predictions: pd.DataFrame) -> pd.DataFrame:
     summary = predicted.join(actual).reset_index()
     summary["prediction_sum_1_3"] = summary[
         [f"prediction_h{horizon}" for horizon in range(1, 4)]
-    ].sum(axis=1)
+    ].sum(axis=1, min_count=3)
     summary["prediction_sum_1_7"] = summary[
         [f"prediction_h{horizon}" for horizon in range(1, 8)]
-    ].sum(axis=1)
+    ].sum(axis=1, min_count=7)
     summary["actual_sum_1_3"] = summary[
         [f"actual_h{horizon}" for horizon in range(1, 4)]
-    ].sum(axis=1)
+    ].sum(axis=1, min_count=3)
     summary["actual_sum_1_7"] = summary[
         [f"actual_h{horizon}" for horizon in range(1, 8)]
-    ].sum(axis=1)
+    ].sum(axis=1, min_count=7)
 
     return summary
 
@@ -144,7 +144,10 @@ def run_experiment(
 ) -> dict[str, float | str | int]:
     frame = load_or_build_feature_table(config, rebuild_features)
     train, valid, cutoff = temporal_split(frame, config.validation_days)
-    feature_columns = get_feature_columns(frame)
+    feature_columns = [
+        column for column in get_feature_columns(frame)
+        if column not in config.excluded_features
+    ]
     categorical_columns = get_categorical_columns(frame)
     train_x = prepare_model_frame(train, feature_columns, categorical_columns, config.model)
     valid_x = prepare_model_frame(valid, feature_columns, categorical_columns, config.model)

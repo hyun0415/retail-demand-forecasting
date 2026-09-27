@@ -87,6 +87,10 @@ Use `configs/catboost.toml` for local CPU training and
 
 ## Colab GPU run
 
+For the full-history GPU comparison, open [`notebooks/07_colab_full_gpu_comparison.ipynb`](notebooks/07_colab_full_gpu_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, trains both models on GPU using the same temporal split, and saves daily and seven-day-sum comparison tables under `outputs/full_history`. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+
+### Previous 365-day CatBoost GPU run
+
 Place the following untracked feature cache in the cloned repository:
 
 ```text

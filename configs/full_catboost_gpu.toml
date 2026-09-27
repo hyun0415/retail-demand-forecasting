@@ -1,0 +1,25 @@
+model = "catboost"
+forecast_horizons = [1, 2, 3, 4, 5, 6, 7]
+training_origin_days = 0
+validation_days = 28
+lags = [1, 7, 14, 28, 56]
+rolling_windows = [7, 14, 28]
+random_state = 42
+excluded_features = ["is_event", "is_earthquake"]
+
+[paths]
+raw = "data/raw"
+processed = "data/processed"
+model = "models/full_history"
+output = "outputs/full_history"
+
+[catboost]
+loss_function = "MAE"
+iterations = 1200
+learning_rate = 0.04
+depth = 8
+l2_leaf_reg = 5.0
+task_type = "GPU"
+devices = "0"
+allow_writing_files = false
+verbose = 50
