@@ -91,6 +91,14 @@ For the full-history GPU comparison, open [`notebooks/05_colab_model_comparison.
 
 Planned NeuralForecast comparisons are N-HiTS (MLP), TCN (CNN), and TFT (recurrent layers with attention). The notebook documents these selections; neural training and evaluation are not implemented yet.
 
+### Short CatBoost diagnosis
+
+The CatBoost diagnostic section of notebook 05 reads only the latest 180 training origin dates from the existing full-history feature cache. It compares GPU `MAE` and `RMSE` runs of 300 iterations each, saving separate results under `outputs/diagnostics/catboost_t180_i300`. Skip the LightGBM CUDA build, full feature generation, and full model training cells for this path. The existing full-history outputs remain unchanged.
+
+```bash
+python scripts/diagnose_catboost.py --config configs/full_catboost_gpu.toml --train-origin-days 180 --iterations 300
+```
+
 ### Previous 365-day CatBoost GPU run
 
 Place the following untracked feature cache in the cloned repository:

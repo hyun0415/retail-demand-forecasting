@@ -91,6 +91,14 @@ python scripts/run_experiment.py --config configs/baseline.toml --rebuild-featur
 
 딥러닝 비교 후보는 NeuralForecast의 N-HiTS(MLP), TCN(CNN), TFT(순환 계층과 attention)입니다. 현재 노트북에는 선정 계획만 정리되어 있으며, 딥러닝 학습·평가 코드는 아직 추가하지 않았습니다.
 
+### CatBoost 단기 진단
+
+전체 이력 CatBoost가 높은 판매량을 거의 예측하지 못한 원인을 확인하려면 05 노트북의 **CatBoost 단기 진단** 셀을 실행합니다. 기존 Feature 캐시에서 검증 직전 180개 학습 기준일만 읽어 `MAE`와 `RMSE`를 각각 300회 GPU 학습합니다. 진단 결과는 `outputs/diagnostics/catboost_t180_i300`에 별도로 저장되며 기존 전체 실험 결과는 유지됩니다. 이 경로에서는 LightGBM CUDA 빌드, 전체 Feature 생성, 전체 ML 학습 셀을 건너뜁니다.
+
+```bash
+python scripts/diagnose_catboost.py --config configs/full_catboost_gpu.toml --train-origin-days 180 --iterations 300
+```
+
 LightGBM CUDA 버전은 Colab에서 소스 빌드가 필요합니다. 노트북이 `nvcc` 존재 여부와 두 모델의 GPU 시험 학습을 확인합니다. 전체 Feature와 모델 입력 표는 CPU RAM도 많이 사용하므로 런타임 메모리에 따라 실행이 실패할 수 있습니다. 목표일 프로모션은 7일 앞까지 확정 계획이 있을 때만 사용할 수 있으며, 기준일 판매량·거래량은 영업 종료 후 예측한다는 전제입니다. 전체 이력 실험에서는 미래의 지진·돌발 이벤트 변수를 모델 입력에서 제외합니다. 이 변경으로 아래 365일 결과와 수치를 직접 비교할 수 없습니다.
 
 ### 기존 365일 CatBoost GPU 실행
