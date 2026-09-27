@@ -10,11 +10,11 @@ excluded_features = ["is_event", "is_earthquake"]
 [paths]
 raw = "data/raw"
 processed = "data/processed"
-model = "models/full_history"
-output = "outputs/full_history"
+model = "models/full_history_l2"
+output = "outputs/full_history_l2"
 
 [catboost]
-loss_function = "MAE"
+loss_function = "RMSE"
 iterations = 1200
 learning_rate = 0.04
 depth = 8

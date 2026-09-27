@@ -13,7 +13,7 @@ Favorita의 점포·상품군별 향후 1~7일 일별 판매량을 예측하는 
 - **모델 구조:** `forecast_horizon=1~7`을 입력받는 통합 글로벌 모델 1개
 - **기준 모델:** 직전 주 일별 패턴과 동일 요일 최근 4주 평균
 - **검증:** 최근 28개 예측 기준일을 분리하고, 검증 시작일 이후의 정답은 학습에서 제외
-- **평가지표:** RMSLE, MAE, WAPE, Bias
+- **평가지표:** RMSLE, MAE, RMSE, WAPE, Bias
 
 기준일 `t`까지 확인 가능한 판매 이력을 공통으로 사용하고, `forecast_horizon`을 1~7로 바꿔 `t+1`부터 `t+7`까지 각각 예측합니다. 목표일 정보 중에서는 사전에 정해지는 프로모션·요일·공휴일만 사용합니다. 결과는 일별로 확인하거나 상품군의 보충 주기에 맞춰 1~3일 또는 1~7일 합계로 활용할 수 있습니다.
 
@@ -87,7 +87,7 @@ python scripts/run_experiment.py --config configs/baseline.toml --rebuild-featur
 
 [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb)을 Colab에서 열고 GPU 및 가능한 경우 높은 RAM 런타임을 선택하세요. 노트북은 `/content/drive/MyDrive/retail-demand-forecasting`에 이 저장소를 clone합니다. 원본 CSV는 Git에 없으므로 clone 후 `data/raw`에 별도로 배치해야 합니다.
 
-노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 두 모델을 GPU로 순서대로 학습합니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에, 결과는 `outputs/full_history`에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 기존 365일 실험 결과는 유지됩니다.
+노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 LightGBM `regression`(L2), CatBoost `RMSE`를 GPU로 순서대로 학습합니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에, 모델은 `models/full_history_l2`, 결과는 `outputs/full_history_l2`에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 이전 L1 전체 이력 결과와 365일 실험 결과는 유지됩니다.
 
 딥러닝 비교 후보는 NeuralForecast의 N-HiTS(MLP), TCN(CNN), TFT(순환 계층과 attention)입니다. 현재 노트북에는 선정 계획만 정리되어 있으며, 딥러닝 학습·평가 코드는 아직 추가하지 않았습니다.
 
@@ -135,7 +135,7 @@ Google Drive 또는 로컬 컴퓨터로 복사합니다. GPU 학습은 부동소
 
 ## 현재 1~7일 통합 모델 결과
 
-최근 365개 예측 기준일로 학습하고 최근 28개 기준일을 검증한 결과입니다.
+이 표는 이전 LightGBM L1 실험 결과입니다. 최근 365개 예측 기준일로 학습하고 최근 28개 기준일을 검증했습니다. 기존 365일 설정은 재현을 위해 유지하며, 05 노트북의 전체 이력 설정만 L2를 사용합니다.
 
 | 모델 | RMSLE | MAE | WAPE | Bias |
 |---|---:|---:|---:|---:|

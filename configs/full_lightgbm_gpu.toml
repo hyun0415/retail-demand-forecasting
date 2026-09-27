@@ -10,11 +10,11 @@ excluded_features = ["is_event", "is_earthquake"]
 [paths]
 raw = "data/raw"
 processed = "data/processed"
-model = "models/full_history"
-output = "outputs/full_history"
+model = "models/full_history_l2"
+output = "outputs/full_history_l2"
 
 [lightgbm]
-objective = "regression_l1"
+objective = "regression"
 n_estimators = 1200
 learning_rate = 0.04
 num_leaves = 63

@@ -60,7 +60,7 @@ def fit_lightgbm(
             train_y,
             eval_X=valid_x,
             eval_y=valid_y,
-            eval_metric="l1",
+            eval_metric="rmse",
             callbacks=callbacks,
         )
 

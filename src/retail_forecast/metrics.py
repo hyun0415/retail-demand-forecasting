@@ -10,6 +10,7 @@ def regression_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict[str, f
     return {
         "rmsle": float(np.sqrt(np.mean(np.square(np.log1p(actual) - np.log1p(predicted))))),
         "mae": float(np.mean(absolute_error)),
+        "rmse": float(np.sqrt(np.mean(np.square(actual - predicted)))),
         "wape": float(absolute_error.sum() / actual_sum * 100) if actual_sum else float("nan"),
         "bias": float((predicted - actual).sum() / actual_sum * 100) if actual_sum else float("nan"),
     }

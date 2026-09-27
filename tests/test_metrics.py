@@ -8,6 +8,7 @@ def test_regression_metrics_clip_negative_predictions() -> None:
 
     assert metrics["rmsle"] >= 0
     assert metrics["mae"] == 1.0
+    assert np.isclose(metrics["rmse"], np.sqrt(2))
     assert np.isclose(metrics["wape"], 200 / 3)
     assert np.isclose(metrics["bias"], 200 / 3)
 

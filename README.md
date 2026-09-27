@@ -13,7 +13,7 @@ This project forecasts daily sales for each Favorita store and product family fr
 - **Model structure:** one global model with `forecast_horizon=1..7`
 - **Baselines:** previous-week daily profile and four-week same-weekday average
 - **Validation:** the latest 28 forecast-origin dates, with later labels purged from training
-- **Metrics:** RMSLE, MAE, WAPE, and Bias
+- **Metrics:** RMSLE, MAE, RMSE, WAPE, and Bias
 
 Features available at forecast origin `t` are shared across seven rows, while `forecast_horizon` changes from 1 to 7 to predict `t+1` through `t+7`. Target-date inputs are limited to promotions, calendar attributes, and holidays known in advance. Daily forecasts can be aggregated over the replenishment window of each product group.
 
@@ -87,7 +87,7 @@ Use `configs/catboost.toml` for local CPU training and
 
 ## Colab GPU run
 
-For the full-history GPU comparison, open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, trains both models on GPU using the same temporal split, and saves daily and seven-day-sum comparison tables under `outputs/full_history`. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+For the full-history GPU comparison, open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. Daily and seven-day-sum comparison tables are saved under `outputs/full_history_l2`; models are saved under `models/full_history_l2`, preserving the earlier L1 results in `full_history`. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
 
 Planned NeuralForecast comparisons are N-HiTS (MLP), TCN (CNN), and TFT (recurrent layers with attention). The notebook documents these selections; neural training and evaluation are not implemented yet.
 
@@ -133,8 +133,9 @@ Generated artifacts:
 
 ## Current multi-horizon result
 
-The model was trained on the latest 365 forecast-origin dates and evaluated on
-the latest 28 origins.
+This historical LightGBM L1 result was trained on the latest 365 forecast-origin
+dates and evaluated on the latest 28 origins. The 365-day configs retain their
+original objectives for reproducibility; notebook 05 uses the full-history L2 configs.
 
 | Model | RMSLE | MAE | WAPE | Bias |
 |---|---:|---:|---:|---:|
