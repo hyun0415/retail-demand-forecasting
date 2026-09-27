@@ -59,7 +59,7 @@ src/retail_forecast/     Data, features, models, and pipeline
 notebooks/01_eda.ipynb
 notebooks/03_baseline_model.ipynb
 notebooks/04_feature_engineering.ipynb
-notebooks/05_model_comparison.ipynb
+notebooks/05_colab_model_comparison.ipynb
 notebooks/06_error_analysis.ipynb
 tests/                   Leakage and metric tests
 ```
@@ -87,7 +87,9 @@ Use `configs/catboost.toml` for local CPU training and
 
 ## Colab GPU run
 
-For the full-history GPU comparison, open [`notebooks/07_colab_full_gpu_comparison.ipynb`](notebooks/07_colab_full_gpu_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, trains both models on GPU using the same temporal split, and saves daily and seven-day-sum comparison tables under `outputs/full_history`. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+For the full-history GPU comparison, open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, trains both models on GPU using the same temporal split, and saves daily and seven-day-sum comparison tables under `outputs/full_history`. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+
+Planned NeuralForecast comparisons are N-HiTS (MLP), TCN (CNN), and TFT (recurrent layers with attention). The notebook documents these selections; neural training and evaluation are not implemented yet.
 
 ### Previous 365-day CatBoost GPU run
 

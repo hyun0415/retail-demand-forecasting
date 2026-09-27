@@ -55,7 +55,7 @@ src/retail_forecast/     데이터·변수·모델·실험 코드
 notebooks/01_eda.ipynb
 notebooks/03_baseline_model.ipynb
 notebooks/04_feature_engineering.ipynb
-notebooks/05_model_comparison.ipynb
+notebooks/05_colab_model_comparison.ipynb
 notebooks/06_error_analysis.ipynb
 tests/                   데이터 누수와 지표 검증
 ```
@@ -85,9 +85,11 @@ python scripts/run_experiment.py --config configs/baseline.toml --rebuild-featur
 
 ### 전체 이력 LightGBM·CatBoost 비교
 
-[`notebooks/07_colab_full_gpu_comparison.ipynb`](notebooks/07_colab_full_gpu_comparison.ipynb)을 Colab에서 열고 GPU 및 가능한 경우 높은 RAM 런타임을 선택하세요. 노트북은 `/content/drive/MyDrive/retail-demand-forecasting`에 이 저장소를 clone합니다. 원본 CSV는 Git에 없으므로 clone 후 `data/raw`에 별도로 배치해야 합니다.
+[`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb)을 Colab에서 열고 GPU 및 가능한 경우 높은 RAM 런타임을 선택하세요. 노트북은 `/content/drive/MyDrive/retail-demand-forecasting`에 이 저장소를 clone합니다. 원본 CSV는 Git에 없으므로 clone 후 `data/raw`에 별도로 배치해야 합니다.
 
-노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 두 모델을 GPU로 순서대로 학습합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에, 결과는 `outputs/full_history`에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 기존 365일 실험 결과는 유지됩니다.
+노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 두 모델을 GPU로 순서대로 학습합니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에, 결과는 `outputs/full_history`에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 기존 365일 실험 결과는 유지됩니다.
+
+딥러닝 비교 후보는 NeuralForecast의 N-HiTS(MLP), TCN(CNN), TFT(순환 계층과 attention)입니다. 현재 노트북에는 선정 계획만 정리되어 있으며, 딥러닝 학습·평가 코드는 아직 추가하지 않았습니다.
 
 LightGBM CUDA 버전은 Colab에서 소스 빌드가 필요합니다. 노트북이 `nvcc` 존재 여부와 두 모델의 GPU 시험 학습을 확인합니다. 전체 Feature와 모델 입력 표는 CPU RAM도 많이 사용하므로 런타임 메모리에 따라 실행이 실패할 수 있습니다. 목표일 프로모션은 7일 앞까지 확정 계획이 있을 때만 사용할 수 있으며, 기준일 판매량·거래량은 영업 종료 후 예측한다는 전제입니다. 전체 이력 실험에서는 미래의 지진·돌발 이벤트 변수를 모델 입력에서 제외합니다. 이 변경으로 아래 365일 결과와 수치를 직접 비교할 수 없습니다.
 

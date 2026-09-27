@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 import pandas as pd
+from tqdm.auto import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -44,7 +45,8 @@ def main() -> None:
     last_origin = history["date"].max() - pd.Timedelta(days=max(config.forecast_horizons))
 
     part = 0
-    for start in pd.date_range(first_origin, last_origin, freq=f"{args.chunk_days}D"):
+    origins = pd.date_range(first_origin, last_origin, freq=f"{args.chunk_days}D")
+    for start in tqdm(origins, desc="Feature 생성", unit="청크"):
         end = min(start + pd.Timedelta(days=args.chunk_days - 1), last_origin)
         frame = build_feature_table(
             data,
@@ -57,7 +59,6 @@ def main() -> None:
         )
         if not frame.empty:
             frame.to_parquet(temporary_path / f"part-{part:04d}.parquet", index=False)
-            print(f"{start.date()} to {end.date()}: {len(frame):,} rows")
             part += 1
         del frame
         gc.collect()

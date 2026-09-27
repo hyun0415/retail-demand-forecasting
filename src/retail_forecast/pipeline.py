@@ -1,10 +1,12 @@
 import json
+import joblib
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from retail_forecast.config import ExperimentConfig
 from retail_forecast.data import load_favorita_data
@@ -111,8 +113,6 @@ def save_artifacts(
     metrics_by_horizon: pd.DataFrame,
     decision_summary: pd.DataFrame,
 ) -> None:
-    import joblib
-
     config.model_path.mkdir(parents=True, exist_ok=True)
     config.output_path.mkdir(parents=True, exist_ok=True)
 
@@ -148,7 +148,7 @@ def run_experiment(
 
     def report(stage: str) -> None:
         if progress:
-            print(f"[{perf_counter() - started:.0f}s] {stage}", flush=True)
+            tqdm.write(f"[{perf_counter() - started:.0f}s] {stage}")
 
     report("Feature 데이터 읽기 시작")
     frame = load_or_build_feature_table(config, rebuild_features)

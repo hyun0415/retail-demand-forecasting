@@ -1,6 +1,44 @@
+import re
 from typing import Any
 
 import pandas as pd
+from catboost import CatBoostRegressor
+from lightgbm import LGBMRegressor, early_stopping
+from tqdm.auto import tqdm
+
+
+class LightGBMProgress:
+    order = 20
+    before_iteration = False
+
+    def __init__(self, bar: tqdm) -> None:
+        self.bar = bar
+
+    def __call__(self, environment: Any) -> None:
+        iteration = environment.iteration + 1
+        self.bar.update(iteration - self.bar.n)
+        if iteration % 50 == 0 and environment.evaluation_result_list:
+            _, metric, value, _ = environment.evaluation_result_list[0]
+            tqdm.write(f"[{iteration}] 검증 {metric}: {value:.4f}")
+
+
+class CatBoostProgress:
+    def __init__(self, bar: tqdm) -> None:
+        self.bar = bar
+        self.buffer = ""
+
+    def write(self, message: str) -> None:
+        self.buffer += message
+        while "\n" in self.buffer:
+            line, self.buffer = self.buffer.split("\n", 1)
+            match = re.match(r"^\s*(\d+):", line)
+            if match:
+                iteration = int(match.group(1)) + 1
+                self.bar.update(iteration - self.bar.n)
+                tqdm.write(f"[{iteration}] {line.split(':', 1)[1].strip()}")
+
+    def flush(self) -> None:
+        pass
 
 
 def fit_lightgbm(
@@ -12,20 +50,19 @@ def fit_lightgbm(
     random_state: int,
     progress: bool = False,
 ) -> Any:
-    from lightgbm import LGBMRegressor, early_stopping, log_evaluation
-
     model = LGBMRegressor(**params, random_state=random_state)
     callbacks = [early_stopping(100, verbose=False)]
-    if progress:
-        callbacks.append(log_evaluation(period=50))
-    model.fit(
-        train_x,
-        train_y,
-        eval_X=valid_x,
-        eval_y=valid_y,
-        eval_metric="l1",
-        callbacks=callbacks,
-    )
+    with tqdm(total=model.n_estimators, desc="LightGBM 학습", unit="회", disable=not progress) as bar:
+        if progress:
+            callbacks.append(LightGBMProgress(bar))
+        model.fit(
+            train_x,
+            train_y,
+            eval_X=valid_x,
+            eval_y=valid_y,
+            eval_metric="l1",
+            callbacks=callbacks,
+        )
 
     return model
 
@@ -38,17 +75,19 @@ def fit_catboost(
     categorical_columns: list[str],
     params: dict,
     random_state: int,
+    progress: bool = False,
 ) -> Any:
-    from catboost import CatBoostRegressor
-
     model = CatBoostRegressor(**params, random_seed=random_state)
-    model.fit(
-        train_x,
-        train_y,
-        eval_set=(valid_x, valid_y),
-        cat_features=categorical_columns,
-        early_stopping_rounds=100,
-    )
+    with tqdm(total=model.get_param("iterations") or 1000, desc="CatBoost 학습", unit="회", disable=not progress) as bar:
+        fit_options = {"log_cout": CatBoostProgress(bar)} if progress else {}
+        model.fit(
+            train_x,
+            train_y,
+            eval_set=(valid_x, valid_y),
+            cat_features=categorical_columns,
+            early_stopping_rounds=100,
+            **fit_options,
+        )
 
     return model
 
@@ -76,6 +115,7 @@ def fit_model(
             categorical_columns,
             params,
             random_state,
+            progress,
         )
 
     raise ValueError(f"Unsupported model: {model_name}")
