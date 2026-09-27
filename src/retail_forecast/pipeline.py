@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -141,17 +142,28 @@ def save_artifacts(
 def run_experiment(
     config: ExperimentConfig,
     rebuild_features: bool = False,
+    progress: bool = False,
 ) -> dict[str, float | str | int]:
+    started = perf_counter()
+
+    def report(stage: str) -> None:
+        if progress:
+            print(f"[{perf_counter() - started:.0f}s] {stage}", flush=True)
+
+    report("Feature 데이터 읽기 시작")
     frame = load_or_build_feature_table(config, rebuild_features)
+    report(f"Feature 데이터 읽기 완료: {len(frame):,}행")
     train, valid, cutoff = temporal_split(frame, config.validation_days)
     feature_columns = [
         column for column in get_feature_columns(frame)
         if column not in config.excluded_features
     ]
     categorical_columns = get_categorical_columns(frame)
+    report(f"모델 입력 준비: 학습 {len(train):,}행, 검증 {len(valid):,}행")
     train_x = prepare_model_frame(train, feature_columns, categorical_columns, config.model)
     valid_x = prepare_model_frame(valid, feature_columns, categorical_columns, config.model)
 
+    report(f"{config.model} 학습 시작")
     model = fit_model(
         config.model,
         train_x,
@@ -161,7 +173,9 @@ def run_experiment(
         categorical_columns,
         config.model_params,
         config.random_state,
+        progress=progress,
     )
+    report(f"{config.model} 학습 완료, 검증 예측 시작")
     predicted = np.clip(model.predict(valid_x), 0, None)
     metrics = regression_metrics(valid["target_sales"].to_numpy(), predicted)
     previous_week_metrics = regression_metrics(
@@ -236,6 +250,7 @@ def run_experiment(
     metrics_by_horizon = pd.DataFrame(horizon_metrics)
     decision_summary = build_decision_summary(predictions)
     importance = get_feature_importance(model, feature_columns)
+    report("결과 저장 시작")
     save_artifacts(
         config,
         model,
@@ -245,5 +260,6 @@ def run_experiment(
         metrics_by_horizon,
         decision_summary,
     )
+    report("결과 저장 완료")
 
     return metrics

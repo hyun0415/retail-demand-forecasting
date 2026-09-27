@@ -10,17 +10,21 @@ def fit_lightgbm(
     valid_y: pd.Series,
     params: dict,
     random_state: int,
+    progress: bool = False,
 ) -> Any:
-    from lightgbm import LGBMRegressor, early_stopping
+    from lightgbm import LGBMRegressor, early_stopping, log_evaluation
 
     model = LGBMRegressor(**params, random_state=random_state)
+    callbacks = [early_stopping(100, verbose=False)]
+    if progress:
+        callbacks.append(log_evaluation(period=50))
     model.fit(
         train_x,
         train_y,
         eval_X=valid_x,
         eval_y=valid_y,
         eval_metric="l1",
-        callbacks=[early_stopping(100, verbose=False)],
+        callbacks=callbacks,
     )
 
     return model
@@ -58,9 +62,10 @@ def fit_model(
     categorical_columns: list[str],
     params: dict,
     random_state: int,
+    progress: bool = False,
 ) -> Any:
     if model_name == "lightgbm":
-        return fit_lightgbm(train_x, train_y, valid_x, valid_y, params, random_state)
+        return fit_lightgbm(train_x, train_y, valid_x, valid_y, params, random_state, progress)
 
     if model_name == "catboost":
         return fit_catboost(
