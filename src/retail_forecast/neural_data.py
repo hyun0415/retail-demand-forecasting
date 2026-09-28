@@ -68,11 +68,8 @@ def future_calendar(series: pd.DataFrame, origin: pd.Timestamp, horizon: int = 7
     return future
 
 
-def training_before_origin(panel: pd.DataFrame, first_origin: pd.Timestamp, days: int | None = None) -> pd.DataFrame:
-    train = panel.loc[panel["ds"].lt(first_origin)]
-    if days is not None:
-        train = train.loc[train["ds"].ge(first_origin - pd.Timedelta(days=days))]
-    return train
+def training_before_origin(panel: pd.DataFrame, first_origin: pd.Timestamp) -> pd.DataFrame:
+    return panel.loc[panel["ds"].lt(first_origin)]
 
 
 def history_through_origin(panel: pd.DataFrame, origin: pd.Timestamp, input_size: int) -> pd.DataFrame:

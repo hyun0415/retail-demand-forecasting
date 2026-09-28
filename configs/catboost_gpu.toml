@@ -20,5 +20,6 @@ depth = 8
 l2_leaf_reg = 5.0
 task_type = "GPU"
 devices = "0"
+gpu_ram_part = 0.8
 allow_writing_files = false
 verbose = 50

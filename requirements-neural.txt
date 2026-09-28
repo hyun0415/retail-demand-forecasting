@@ -1,5 +1,7 @@
 neuralforecast==3.2.2
+koreanize-matplotlib>=0.1.1
 numpy
 pandas
 pyarrow
+seaborn>=0.13.2
 tqdm

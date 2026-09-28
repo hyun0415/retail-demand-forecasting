@@ -57,11 +57,10 @@ def run_neural_validation(
     input_size: int = 56,
     max_steps: int = 300,
     batch_size: int = 32,
-    training_history_days: int | None = None,
 ) -> pd.DataFrame:
     started = perf_counter()
     first_origin = template["date"].min()
-    train = training_before_origin(panel, first_origin, training_history_days)
+    train = training_before_origin(panel, first_origin)
     if train["ds"].nunique() < input_size + 14:
         raise ValueError("학습 이력이 입력 길이와 검증용 7일을 채우지 못합니다.")
 
