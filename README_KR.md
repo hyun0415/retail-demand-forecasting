@@ -43,6 +43,8 @@ transactions.csv
 
 이동평균은 반드시 하루 이상 이전의 판매량으로 계산합니다. 목표값도 단순 행 이동이 아니라 실제 날짜와 점포·상품군을 기준으로 결합해 누락된 날짜로 인한 오류를 방지했습니다. 유가는 수요와의 관계를 명확히 설명하기 어려워 모델에서 제외했습니다.
 
+**선정 근거:** EDA에서 확인한 7일 반복 패턴을 기준으로 [전주 동일 요일·최근 4주 평균 Baseline](notebooks/03_baseline_model.ipynb)을 정했습니다. [Feature별 채택 이유와 사용 가능한 시점](notebooks/04_feature_engineering.ipynb)은 별도 표로 정리했습니다.
+
 ## 폴더 구성
 
 ```text
@@ -57,6 +59,8 @@ notebooks/03_baseline_model.ipynb
 notebooks/04_feature_engineering.ipynb
 notebooks/05_colab_model_comparison.ipynb
 notebooks/06_error_analysis.ipynb
+notebooks/07_dl_colab_validation.ipynb
+requirements-neural.txt    NeuralForecast 별도 설치 목록
 tests/                   데이터 누수와 지표 검증
 ```
 
@@ -85,11 +89,27 @@ python scripts/run_experiment.py --config configs/baseline.toml --rebuild-featur
 
 ### 전체 이력 LightGBM·CatBoost 비교
 
-[`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb)을 Colab에서 열고 GPU 및 가능한 경우 높은 RAM 런타임을 선택하세요. 노트북은 `/content/drive/MyDrive/retail-demand-forecasting`에 이 저장소를 clone합니다. 원본 CSV는 Git에 없으므로 clone 후 `data/raw`에 별도로 배치해야 합니다.
+별도의 00 clone 노트북으로 `/content/drive/MyDrive/retail-demand-forecasting`에 저장소를 준비한 뒤 [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb)을 Colab에서 열고 GPU 및 가능한 경우 높은 RAM 런타임을 선택하세요. 05 노트북은 clone·pull을 수행하지 않습니다. 원본 CSV는 Git에 없으므로 `data/raw`에 별도로 배치해야 합니다.
 
-노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 LightGBM `regression`(L2), CatBoost `RMSE`를 GPU로 순서대로 학습합니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에, 모델은 `models/full_history_l2`, 결과는 `outputs/full_history_l2`에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 이전 L1 전체 이력 결과와 365일 실험 결과는 유지됩니다.
+노트북은 환경 준비·패키지 설치를 먼저 두고, Library 셀에는 import만, 필요한 경우 Utils 셀에는 함수·클래스만 모읍니다. 이후 설정값과 실행·분석 셀을 배치하며, 불필요한 분기와 출력을 피합니다.
 
-딥러닝 비교 후보는 NeuralForecast의 N-HiTS(MLP), TCN(CNN), TFT(순환 계층과 attention)입니다. 현재 노트북에는 선정 계획만 정리되어 있으며, 딥러닝 학습·평가 코드는 아직 추가하지 않았습니다.
+노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 LightGBM `regression`(L2), CatBoost `RMSE`를 GPU로 순서대로 학습합니다. 노트북의 `MODEL_OVERRIDES` 셀에서 두 모델의 최대 트리 수를 600으로 지정하며 다른 모델 파라미터도 같은 방식으로 전달합니다. `RUN_NAME`으로 저장 경로를 정하고, 초기값은 `models/full_history_l2_i600` 및 `outputs/full_history_l2_i600`입니다. 적용된 파라미터와 실제 트리 수는 지표 파일에 저장됩니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet` 디렉터리에 저장됩니다. `comparison_full_history.csv`는 전체 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다. 이전 L1·L2 결과와 365일 실험 결과는 유지됩니다.
+
+### 딥러닝 GPU 시험 및 검증
+
+[`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb)은 N-HiTS(MLP), TCN(CNN), TFT(LSTM·attention)를 위한 별도 Colab 노트북입니다. 00 clone 노트북으로 저장소를 준비한 뒤 실행합니다. `requirements-neural.txt`로 NeuralForecast를 설치하며 ML용 LightGBM CUDA 빌드는 필요하지 않습니다.
+
+| 단계 | 대상 | 실행 조건 |
+|---|---|---|
+| 작은 GPU 시험 | N-HiTS → TCN, 8개 시계열·2개 기준일·20 학습 step | 먼저 실행해 GPU 메모리·시간·출력 확인 |
+| 전체 검증 | N-HiTS → TCN, 전체 시계열·28개 기준일 | 시험 결과를 확인한 뒤 `RUN_FULL=True` |
+| 추가 검증 | TFT, 같은 전체 입력·28개 기준일 | 앞선 두 모델 결과를 확인한 뒤 `RUN_TFT=True` |
+
+07은 05의 `outputs/<ML_RUN_NAME>/validation_predictions_lightgbm.csv`에서 검증 키를 읽습니다. 공통 결과 열은 `date`(기준일), `target_date`, `forecast_horizon`, `store_nbr`, `family`, `target_sales`, `prediction`입니다. 전체 검증 시 ML과 **같은 28개 연속 기준일과 같은 검증 행**을 사용합니다. 비교 코드는 키·정답이 다르면 오류를 냅니다. N-HiTS·TCN·TFT는 각 기준일 `t`에서 `t+1`~`t+7`을 한 번에 예측합니다.
+
+DL 학습은 첫 검증 기준일 **전날**까지만 사용합니다. 기준일별 예측에는 해당일 `t`까지 실제로 확인한 판매 이력과 미래에 미리 아는 요일·월만 전달합니다. 원본에 누락된 날짜는 `available_mask=0`으로 표시하고 0 판매와 구별합니다. DL에는 ML의 미래 프로모션·공휴일 등 추가 변수를 아직 넣지 않으므로, 첫 비교는 모델과 입력 변수의 차이를 함께 반영합니다.
+
+07 결과는 `outputs/neural_smoke/<model>` 또는 `outputs/neural_full/<model>`에 예측 Parquet, 지표 CSV, 7일 합계 Parquet으로 저장됩니다. 작은 시험 비교 표는 `outputs/neural_smoke/comparison_nhits_tcn.csv`, 전체 공통 행 비교 표는 `outputs/neural_full/comparison_ml_dl.csv`에 저장됩니다. 모델은 `models/neural_*`에 저장되고 Git에서 제외됩니다. 전체 입력은 `data/processed/neural_panel_full.parquet`에 별도로 저장합니다. 작은 시험의 지표는 전체 ML 지표와 비교하지 않습니다. Colab GPU의 실제 실행 성공과 메모리 사용은 작은 시험 결과를 보고 확인해야 합니다.
 
 ### CatBoost 단기 진단
 

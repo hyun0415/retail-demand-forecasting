@@ -50,8 +50,10 @@ def fit_lightgbm(
     random_state: int,
     progress: bool = False,
 ) -> Any:
-    model = LGBMRegressor(**params, random_state=random_state)
-    callbacks = [early_stopping(100, verbose=False)]
+    model_params = params.copy()
+    patience = model_params.pop("early_stopping_rounds", 100)
+    model = LGBMRegressor(**model_params, random_state=random_state)
+    callbacks = [early_stopping(patience, verbose=False)]
     with tqdm(total=model.n_estimators, desc="LightGBM 학습", unit="회", disable=not progress) as bar:
         if progress:
             callbacks.append(LightGBMProgress(bar))
@@ -77,7 +79,9 @@ def fit_catboost(
     random_state: int,
     progress: bool = False,
 ) -> Any:
-    model = CatBoostRegressor(**params, random_seed=random_state)
+    model_params = params.copy()
+    patience = model_params.pop("early_stopping_rounds", 100)
+    model = CatBoostRegressor(**model_params, random_seed=random_state)
     with tqdm(total=model.get_param("iterations") or 1000, desc="CatBoost 학습", unit="회", disable=not progress) as bar:
         fit_options = {"log_cout": CatBoostProgress(bar)} if progress else {}
         model.fit(
@@ -85,7 +89,7 @@ def fit_catboost(
             train_y,
             eval_set=(valid_x, valid_y),
             cat_features=categorical_columns,
-            early_stopping_rounds=100,
+            early_stopping_rounds=patience,
             **fit_options,
         )
 

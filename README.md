@@ -47,6 +47,8 @@ The pipeline combines:
 
 All sales rolling features are shifted by at least one day. Targets are joined by exact date, store, and family rather than generated through an unchecked row shift. Oil price is excluded because its relationship with daily store-family demand is difficult to justify clearly.
 
+**Selection rationale:** The seven-day pattern observed in EDA motivates the [previous-week and four-week same-weekday baselines](notebooks/03_baseline_model.ipynb). A table of [feature groups, reference dates, and availability conditions](notebooks/04_feature_engineering.ipynb) documents the model inputs.
+
 ## Repository structure
 
 ```text
@@ -61,6 +63,8 @@ notebooks/03_baseline_model.ipynb
 notebooks/04_feature_engineering.ipynb
 notebooks/05_colab_model_comparison.ipynb
 notebooks/06_error_analysis.ipynb
+notebooks/07_dl_colab_validation.ipynb
+requirements-neural.txt    Separate NeuralForecast dependencies
 tests/                   Leakage and metric tests
 ```
 
@@ -87,9 +91,17 @@ Use `configs/catboost.toml` for local CPU training and
 
 ## Colab GPU run
 
-For the full-history GPU comparison, open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. It clones this repository into My Drive, builds Parquet features in date chunks, and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. Daily and seven-day-sum comparison tables are saved under `outputs/full_history_l2`; models are saved under `models/full_history_l2`, preserving the earlier L1 results in `full_history`. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+Prepare the repository in My Drive with the separate 00 clone notebook, then open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. Notebook 05 mounts Drive and installs packages but does not clone or pull. It builds Parquet features in date chunks and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. The notebook's `MODEL_OVERRIDES` cell caps both models at 600 trees and accepts additional model parameters; `RUN_NAME` controls the model and output directories (initially `full_history_l2_i600`). Effective parameters and tree counts are saved with the metrics. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. The notebook requires a CUDA-enabled LightGBM source build and a high-RAM runtime; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
 
-Planned NeuralForecast comparisons are N-HiTS (MLP), TCN (CNN), and TFT (recurrent layers with attention). The notebook documents these selections; neural training and evaluation are not implemented yet.
+Notebook layout: environment and package setup first, then one import-only Library section, a Utils section when functions or classes are needed, and separate parameter and execution sections. Keep branching and output to what the experiment needs.
+
+### Neural GPU validation
+
+[`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb) prepares NeuralForecast N-HiTS (MLP), TCN (CNN), and TFT (LSTM with attention) in a separate Colab notebook. It first runs N-HiTS and TCN on eight series and two forecast origins with 20 training steps. Full N-HiTS and TCN runs require `RUN_FULL=True`; TFT additionally requires `RUN_TFT=True` after reviewing those results. Install the separate `requirements-neural.txt` in the notebook.
+
+The notebook reads the ML validation predictions from `outputs/<ML_RUN_NAME>/validation_predictions_lightgbm.csv` and verifies 28 consecutive origins. Common prediction columns are `date` (origin), `target_date`, `forecast_horizon`, `store_nbr`, `family`, `target_sales`, and `prediction`. Full neural validation uses the exact ML evaluation rows. Training stops before the first validation origin; inference at each origin uses observed sales only through that date, plus known calendar fields. Missing raw dates have `available_mask=0`, distinct from observed zero sales. The neural models currently use fewer exogenous variables than ML, so performance differences also reflect different inputs.
+
+Neural predictions, metrics, and seven-day totals are saved under `outputs/neural_smoke` or `outputs/neural_full`. The smoke and full comparison tables are saved as `comparison_nhits_tcn.csv` and `comparison_ml_dl.csv` in those directories. Model files are saved under `models/neural_*`. Full daily input is cached as Parquet under `data/processed`. The small GPU test must be run in Colab before claiming GPU compatibility or starting full training.
 
 ### Short CatBoost diagnosis
 
