@@ -5,7 +5,8 @@ import pandas as pd
 from neuralforecast import NeuralForecast
 from neuralforecast.losses.pytorch import MSE
 from neuralforecast.models import NHITS, TCN, TFT
-from tqdm.auto import tqdm
+from pytorch_lightning.callbacks import Callback
+from tqdm import tqdm
 
 from retail_forecast.neural_data import (
     CALENDAR_COLUMNS,
@@ -18,6 +19,22 @@ from retail_forecast.neural_data import (
 
 
 MODEL_CLASSES = {"NHITS": NHITS, "TCN": TCN, "TFT": TFT}
+
+
+class TrainingProgress(Callback):
+    def __init__(self, name: str, max_steps: int):
+        self.name = name
+        self.max_steps = max_steps
+        self.bar = None
+
+    def on_train_start(self, trainer, pl_module):
+        self.bar = tqdm(total=self.max_steps, desc=f"{self.name} 학습", unit="step", mininterval=5)
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        self.bar.update(1)
+
+    def on_train_end(self, trainer, pl_module):
+        self.bar.close()
 
 
 def make_neural_model(name: str, input_size: int, max_steps: int, batch_size: int = 32):
@@ -33,7 +50,9 @@ def make_neural_model(name: str, input_size: int, max_steps: int, batch_size: in
         random_seed=42,
         accelerator="gpu",
         devices=1,
-        enable_progress_bar=True,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        callbacks=[TrainingProgress(name, max_steps)],
         logger=False,
     )
     if name == "NHITS":
@@ -71,7 +90,7 @@ def run_neural_validation(
 
     predictions = []
     origins = sorted(template["date"].unique())
-    for origin in tqdm(origins, desc=f"{name} 기준일 예측"):
+    for origin in tqdm(origins, desc=f"{name} 기준일 예측", unit="기준일", mininterval=1):
         origin = pd.Timestamp(origin)
         history = history_through_origin(panel, origin, input_size)
         future = future_calendar(series, origin)
