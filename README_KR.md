@@ -93,11 +93,11 @@ python scripts/run_experiment.py --config configs/baseline.toml --rebuild-featur
 
 모든 노트북은 상단에서 Seaborn과 나눔고딕 글꼴을 준비하고 `sns.set_theme`으로 한글 차트를 설정합니다. Library 셀에는 import만, 필요한 경우 Utils 셀에는 함수·클래스만 모읍니다. 이후 설정값과 실행·분석 셀을 배치합니다.
 
-노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 LightGBM `regression`(L2), CatBoost `RMSE`를 GPU로 순서대로 학습합니다. `MODEL_OVERRIDES`에서 두 모델의 최대 트리 수는 600, CatBoost의 `gpu_ram_part`는 0.8입니다. 전체 이력·365일 CatBoost GPU 설정 파일에도 0.8을 적용했습니다. `RUN_NAME` 초기값은 `full_history_l2_i600`이며, 재학습 결과를 따로 남기려면 이름을 바꾸세요. 적용된 파라미터와 실제 트리 수는 지표 파일에 저장됩니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet`에 저장됩니다. `comparison_full_history.csv`는 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다.
+노트북은 전체 원본에서 기준일별 Feature를 28일 단위 Parquet으로 생성하고, 동일한 최근 28개 기준일을 검증 구간으로 사용해 LightGBM `regression`(L2), CatBoost `RMSE`를 GPU로 순서대로 학습합니다. `MODEL_OVERRIDES`에서 두 모델의 최대 트리 수는 600, CatBoost의 `gpu_ram_part`는 0.8입니다. 전체 이력·365일 CatBoost GPU 설정 파일에도 0.8을 적용했습니다. `RUN_NAME` 초기값은 `full_history_l2_i600_opencl`이며, 이전 CUDA 실험 결과와 분리해 저장합니다. 적용된 파라미터와 실제 트리 수는 지표 파일에 저장됩니다. Feature 청크와 학습 반복 횟수는 진행 막대로, 단계별 경과 시간과 검증 점수는 로그로 표시합니다. 생성 데이터는 `data/processed/features_h1-7_dall_l1-7-14-28-56_r7-14-28.parquet`에 저장됩니다. `comparison_full_history.csv`는 일별·7일 합계 지표를, `comparison_by_horizon_full_history.csv`는 예측 거리별 지표를 담습니다.
 
 ### 딥러닝 GPU 검증
 
-[`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb)은 N-HiTS(MLP), TCN(CNN), TFT(LSTM·attention)를 위한 별도 Colab 노트북입니다. 00 clone 노트북으로 저장소를 준비한 뒤 실행합니다. `requirements-neural.txt`로 NeuralForecast를 설치하며 ML용 LightGBM CUDA 빌드는 필요하지 않습니다.
+[`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb)은 N-HiTS(MLP), TCN(CNN), TFT(LSTM·attention)를 위한 별도 Colab 노트북입니다. 00 clone 노트북으로 저장소를 준비한 뒤 실행합니다. `requirements-neural.txt`로 NeuralForecast를 설치합니다.
 
 07은 전체 일별 입력을 준비한 뒤 N-HiTS, TCN, TFT의 전체 학습 셀을 순서대로 둡니다. 필요한 모델 셀을 선택해 실행하세요. 세 모델은 같은 28개 검증 기준일을 사용합니다.
 
@@ -107,7 +107,7 @@ DL 학습은 첫 검증 기준일 **전날**까지만 사용합니다. 기준일
 
 07 결과는 `outputs/neural_full/<model>`에 예측 Parquet, 지표 CSV, 7일 합계 Parquet으로 저장됩니다. 공통 행 비교 표는 `outputs/neural_full/comparison_ml_dl.csv`에 저장됩니다. 모델은 `models/neural_full`에 저장되고 Git에서 제외됩니다. 전체 입력은 `data/processed/neural_panel_full.parquet`에 별도로 저장합니다.
 
-LightGBM CUDA 버전은 Colab에서 소스 빌드가 필요합니다. 전체 Feature와 모델 입력 표는 CPU RAM도 많이 사용하므로 런타임 메모리에 따라 실행이 실패할 수 있습니다. 목표일 프로모션은 7일 앞까지 확정 계획이 있을 때만 사용할 수 있으며, 기준일 판매량·거래량은 영업 종료 후 예측한다는 전제입니다. 전체 이력 실험에서는 미래의 지진·돌발 이벤트 변수를 모델 입력에서 제외합니다. 이 변경으로 아래 365일 결과와 수치를 직접 비교할 수 없습니다.
+05 노트북의 LightGBM은 사전 빌드된 OpenCL GPU 버전(`device_type="gpu"`)을 사용하며 CUDA 컴파일러가 필요하지 않습니다. 전체 Feature와 모델 입력 표는 CPU RAM도 많이 사용하므로 런타임 메모리에 따라 실행이 실패할 수 있습니다. 목표일 프로모션은 7일 앞까지 확정 계획이 있을 때만 사용할 수 있으며, 기준일 판매량·거래량은 영업 종료 후 예측한다는 전제입니다. 전체 이력 실험에서는 미래의 지진·돌발 이벤트 변수를 모델 입력에서 제외합니다. 이 변경으로 아래 365일 결과와 수치를 직접 비교할 수 없습니다.
 
 ### 기존 365일 CatBoost GPU 실행
 
