@@ -1,6 +1,6 @@
 # Retail Demand Forecasting
 
-This project forecasts daily sales for each Favorita store and product family from one to seven days ahead. It supports replenishment and promotion decisions rather than treating forecasting as a leaderboard-only exercise.
+This project forecasts daily sales for each Favorita store and product family from one to seven days ahead. Its primary use case is company-wide, store-level demand planning to inform replenishment and allocation; store teams can review their own forecasts. Promotion analysis is a related use case.
 
 [한국어 README](README_KR.md)
 
@@ -17,7 +17,19 @@ This project forecasts daily sales for each Favorita store and product family fr
 
 Features available at forecast origin `t` are shared across seven rows, while `forecast_horizon` changes from 1 to 7 to predict `t+1` through `t+7`. Target-date inputs are limited to promotions, calendar attributes, and holidays known in advance. Daily forecasts can be aggregated over the replenishment window of each product group.
 
-Lag and rolling features are calculated from the full history, after which only the latest 365 forecast-origin dates are expanded across horizons 1–7. The resulting training table is cached as Parquet under `data/processed` and reused across model runs.
+Lag and rolling features are calculated from the full history. The historical baseline expands the latest 365 forecast-origin dates across horizons 1–7; the full-history Colab comparison uses all eligible origins. Training tables are cached as Parquet under `data/processed` and reused across model runs.
+
+## Business use and SCM boundary
+
+One global model learns from all stores, but produces a separate daily forecast for each **store × product family**. The seven daily forecasts from origin `t` can be summed into projected sales for `t+1` through `t+7`. Forecasts and aggregate metrics are implemented; the role-specific views below are the intended interpretation work.
+
+| User | Decision supported | View to develop |
+|---|---|---|
+| Central demand and replenishment team | Compare expected demand across stores and families; prioritize review and allocation planning | Store-family daily forecasts, seven-day totals, and error by store or demand segment |
+| Store team | Review the local forecast and flag unusual demand before replenishment decisions | Forecasts and exceptions filtered to that store |
+| Marketing team | Examine how demand patterns and forecast errors vary around planned promotions | Descriptive store-family and promotion comparisons; no causal lift estimate |
+
+This is an **input to supply-chain planning**, not an automated purchase-order system. The data is at product-family level and does not provide SKU-level stock on hand, incoming inventory, supplier lead times, pack sizes, or service-level rules needed to calculate order quantities. Observed sales may also fall below unconstrained demand when items are out of stock. Therefore, the project reports forecast accuracy and decision-relevant demand patterns, not measured savings, prevented stockouts, or optimal orders. These boundaries also guide the planned store and demand-segment error analysis.
 
 ## Data
 
