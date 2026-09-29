@@ -12,7 +12,7 @@ Core data and training logic lives in `src/retail_forecast/`. Notebooks support 
 | [05_colab_model_comparison.ipynb](05_colab_model_comparison.ipynb) | Full-history LightGBM/CatBoost GPU fit and Valid/Test outputs | Existing |
 | [06_error_analysis.ipynb](06_error_analysis.ipynb) | Store, family and horizon error inspection | Existing; segment analysis planned |
 | [07_dl_colab_validation.ipynb](07_dl_colab_validation.ipynb) | N-HiTS/TCN/TFT training, internal loss and common-row comparison | Existing |
-| [08_model_evaluation_and_decision.ipynb](08_model_evaluation_and_decision.ipynb) | Saved ML/DL forecasts versus baselines, weak segments and examples from one forecast origin | Existing; no training |
+| [08_model_evaluation_and_decision.ipynb](08_model_evaluation_and_decision.ipynb) | Common-row comparison of two ML and three DL models by demand tier, family and store, plus one-origin review cases | Existing; no training |
 | [09_lightgbm_historical_backtest.ipynb](09_lightgbm_historical_backtest.ipynb) | LightGBM, baseline and validation-selected rule at two earlier dates | Existing; optional GPU retraining |
 
 Demand clustering and operational decision visualizations are planned, so no nonexistent notebook is linked.
@@ -22,7 +22,7 @@ Demand clustering and operational decision visualizations are planned, so no non
 1. Use the separate `00` clone notebook to prepare the repository at `/content/drive/MyDrive/retail-demand-forecasting`, then put the Kaggle `train.csv`, `stores.csv`, `holidays_events.csv` and `transactions.csv` files in `data/raw`. The `00` notebook is not part of this repository.
 2. Run **05** with GPU and sufficient CPU RAM. It does not clone or pull. It builds the full-history Parquet feature cache and saves ML models, Valid/Test forecasts and metrics under `RUN_NAME=full_history_time_split_fixed_i600`.
 3. Match **07**'s `ML_RUN_NAME` to 05's `RUN_NAME`, then run 07. It uses ML prediction files to form aligned evaluation rows. Set `MODEL_STEPS` and `VAL_CHECK_STEPS` near the top; model-specific loss and predictions are saved under `neural_time_split_val_loss`.
-4. Match the two run names in **08** and use saved Valid/Test predictions to inspect errors by store, family, horizon and demand level. Select the low-demand fallback on Valid, then show examples from one Test origin. Since Test has already been examined, treat the result as exploratory. 08 does not train or rebuild features.
+4. Match the two run names in **08** and use saved Valid/Test predictions to compare all five models on the same rows by demand level, family and store. Evaluate a separate validation-selected low-demand fallback for each model, then show examples from one Test origin. Since Test has already been examined, treat fallback results as exploratory. 08 does not train or rebuild features.
 5. To check whether the gain repeats at earlier dates, set `RUN_BACKTEST=True` in **09** and run only the dates needed. It reuses the feature cache but trains LightGBM once per date. The default `False` prevents an accidental full run.
 6. Change the run name when rerunning with different settings to preserve earlier outputs. Full training is expensive; inspect parameters and required artifacts first.
 
