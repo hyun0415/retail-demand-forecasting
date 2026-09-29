@@ -37,6 +37,12 @@ class TrainingProgress(Callback):
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         self.bar.update(1)
 
+    def on_validation_end(self, trainer, pl_module):
+        if trainer.sanity_checking or self.bar is None:
+            return
+        step, val_mse = pl_module.valid_trajectories[-1]
+        tqdm.write(f"{self.name}: {step} step | 검증 MSE {val_mse:.4f}")
+
     def on_train_end(self, trainer, pl_module):
         self.completed_steps = int(trainer.global_step)
         self.bar.close()
@@ -74,7 +80,12 @@ def inspect_series_schedule(
 
 
 def make_neural_model(
-    name: str, input_size: int, max_steps: int, batch_size: int = 32, windows_batch_size: int = 256
+    name: str,
+    input_size: int,
+    max_steps: int,
+    batch_size: int = 32,
+    windows_batch_size: int = 256,
+    val_check_steps: int = 250,
 ):
     common = dict(
         h=7,
@@ -82,6 +93,7 @@ def make_neural_model(
         futr_exog_list=CALENDAR_COLUMNS,
         loss=MSE(),
         max_steps=max_steps,
+        val_check_steps=val_check_steps,
         batch_size=batch_size,
         windows_batch_size=windows_batch_size,
         scaler_type="robust",
@@ -115,6 +127,7 @@ def run_neural_validation(
     max_steps: int = 300,
     batch_size: int = 32,
     windows_batch_size: int = 256,
+    val_check_steps: int = 250,
 ) -> pd.DataFrame:
     started = perf_counter()
     first_origin = template["date"].min()
@@ -123,7 +136,8 @@ def run_neural_validation(
         raise ValueError("학습 이력이 입력 길이와 검증용 7일을 채우지 못합니다.")
 
     model = NeuralForecast(
-        models=[make_neural_model(name, input_size, max_steps, batch_size, windows_batch_size)], freq="D"
+        models=[make_neural_model(name, input_size, max_steps, batch_size, windows_batch_size, val_check_steps)],
+        freq="D",
     )
     tqdm.write(f"{name}: 학습 시작 ({len(train):,}행, {train['ds'].min().date()}~{train['ds'].max().date()})")
     model.fit(df=train, val_size=7)
@@ -133,6 +147,15 @@ def run_neural_validation(
         f"{name}: 학습 완료 ({perf_counter() - started:.0f}초, "
         f"{progress.completed_steps} step = {full_epochs} epoch + {extra_steps} step; "
         f"epoch당 {progress.steps_per_epoch} step)"
+    )
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+    loss_curve = pd.DataFrame(model.models[0].valid_trajectories, columns=["step", "val_mse"])
+    loss_curve.loc[loss_curve["step"] > 0].to_csv(
+        output_path / f"validation_loss_{name.lower()}.csv", index=False
+    )
+    pd.DataFrame(model.models[0].train_trajectories, columns=["step", "train_mse_scaled"]).to_csv(
+        output_path / f"training_loss_{name.lower()}.csv", index=False
     )
 
     predictions = []
@@ -146,8 +169,6 @@ def run_neural_validation(
 
     result = pd.concat(predictions, ignore_index=True)
     metrics, decisions = summarize_neural_predictions(result, name)
-    output_path = Path(output_path)
-    output_path.mkdir(parents=True, exist_ok=True)
     result.to_parquet(output_path / f"validation_predictions_{name.lower()}.parquet", index=False)
     metrics.to_csv(output_path / f"metrics_{name.lower()}.csv", index=False)
     decisions.to_parquet(output_path / f"decision_summary_{name.lower()}.parquet", index=False)
