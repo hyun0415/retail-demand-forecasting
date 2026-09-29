@@ -274,12 +274,26 @@ def run_experiment(
     return metrics
 
 
-def run_time_split_experiment(config: ExperimentConfig, progress: bool = False) -> dict[str, Any]:
+def run_time_split_experiment(
+    config: ExperimentConfig,
+    progress: bool = False,
+    last_origin: pd.Timestamp | None = None,
+) -> dict[str, Any]:
     def report(message: str) -> None:
         if progress:
             tqdm.write(message)
 
     frame = load_or_build_feature_table(config)
+    if last_origin is not None:
+        last_origin = pd.Timestamp(last_origin)
+        if last_origin > frame["date"].max():
+            raise ValueError("평가 기준일이 Feature 데이터의 마지막 날짜보다 늦습니다.")
+        frame = frame.loc[
+            frame["date"].le(last_origin)
+            & frame["target_date"].le(last_origin + pd.Timedelta(days=max(config.forecast_horizons)))
+        ]
+        if frame.empty or frame["date"].max() != last_origin:
+            raise ValueError("지정한 평가 기준일에 완전한 Feature 행이 없습니다.")
     split = forecast_split(frame["date"].max(), horizon=max(config.forecast_horizons))
     cohort = complete_evaluation_series(frame, split, config.forecast_horizons)
     if cohort.empty:
