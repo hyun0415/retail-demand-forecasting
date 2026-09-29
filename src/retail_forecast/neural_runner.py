@@ -38,7 +38,7 @@ class TrainingProgress(Callback):
         self.bar.update(1)
 
     def on_validation_end(self, trainer, pl_module):
-        if trainer.sanity_checking or self.bar is None:
+        if trainer.sanity_checking or self.bar is None or not pl_module.valid_trajectories:
             return
         step, val_mse = pl_module.valid_trajectories[-1]
         tqdm.write(f"{self.name}: {step} step | 검증 MSE {val_mse:.4f}")
