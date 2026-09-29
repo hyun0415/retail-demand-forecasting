@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from retail_forecast.data import FavoritaData
-from retail_forecast.features import add_sales_history, build_feature_table
+from retail_forecast.features import add_sales_history, build_feature_table, get_feature_columns
 from retail_forecast.pipeline import build_decision_summary, temporal_split
 
 
@@ -97,6 +97,15 @@ def test_temporal_split_has_no_date_overlap() -> None:
     assert train["target_date"].max() < cutoff
     assert valid["date"].min() >= cutoff
     assert set(valid["forecast_horizon"].unique()) == {1, 7}
+
+
+def test_future_promotion_is_not_a_model_feature() -> None:
+    frame = build_feature_table(make_sample_data(), (1, 7), (1, 7), (7,))
+    features = get_feature_columns(frame)
+
+    assert "onpromotion" in features
+    assert "target_onpromotion" in frame.columns
+    assert "target_onpromotion" not in features
 
 
 def test_origin_window_is_applied_before_horizon_expansion() -> None:

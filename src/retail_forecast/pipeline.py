@@ -18,6 +18,7 @@ from retail_forecast.features import (
 )
 from retail_forecast.metrics import regression_metrics
 from retail_forecast.models import fit_model
+from retail_forecast.time_split import complete_evaluation_series, forecast_split
 
 
 def feature_cache_path(config: ExperimentConfig) -> Path:
@@ -271,3 +272,81 @@ def run_experiment(
     report("결과 저장 완료")
 
     return metrics
+
+
+def run_time_split_experiment(config: ExperimentConfig, progress: bool = False) -> dict[str, Any]:
+    def report(message: str) -> None:
+        if progress:
+            tqdm.write(message)
+
+    frame = load_or_build_feature_table(config)
+    split = forecast_split(frame["date"].max(), horizon=max(config.forecast_horizons))
+    cohort = complete_evaluation_series(frame, split, config.forecast_horizons)
+    if cohort.empty:
+        raise ValueError("검증과 테스트의 모든 기준일·horizon에 정답이 있는 시계열이 없습니다.")
+
+    if len(cohort) != frame.groupby(["store_nbr", "family"], observed=True).ngroups:
+        keys = pd.MultiIndex.from_frame(cohort[["store_nbr", "family"]])
+        keep = pd.MultiIndex.from_frame(frame[["store_nbr", "family"]]).isin(keys)
+        frame = frame.loc[keep]
+    train = frame.loc[frame["target_date"].lt(split.validation_start)]
+    valid = frame.loc[frame["date"].between(split.validation_start, split.validation_end)]
+    test = frame.loc[frame["date"].between(split.test_start, split.test_end)]
+    columns = [column for column in get_feature_columns(frame) if column not in config.excluded_features]
+    categorical = get_categorical_columns(frame)
+    report(f"학습 {len(train):,}행, 검증 {len(valid):,}행, 테스트 {len(test):,}행")
+
+    train_x = prepare_model_frame(train, columns, categorical, config.model)
+    valid_x = prepare_model_frame(valid, columns, categorical, config.model)
+    selection_model = fit_model(
+        config.model, train_x, train["target_sales"], valid_x, valid["target_sales"],
+        categorical, config.model_params, config.random_state, progress=progress,
+    )
+    if config.model == "lightgbm":
+        iterations = int(selection_model.best_iteration_ or selection_model.n_estimators_)
+    else:
+        iterations = int(selection_model.best_iteration_ + 1)
+    prediction_columns = [
+        "date", "target_date", "forecast_horizon", "store_nbr", "family", "target_sales",
+        "sales_same_weekday_last_week", "sales_same_weekday_4w_mean",
+    ]
+    valid_predictions = valid[prediction_columns].copy()
+    valid_predictions["prediction"] = np.clip(selection_model.predict(valid_x), 0, None)
+    test_x = prepare_model_frame(test, columns, categorical, config.model)
+    test_predictions = test[prediction_columns].copy()
+    test_predictions["prediction"] = np.clip(selection_model.predict(test_x), 0, None)
+
+    valid_metrics = regression_metrics(valid_predictions["target_sales"], valid_predictions["prediction"])
+    test_metrics = regression_metrics(test_predictions["target_sales"], test_predictions["prediction"])
+    metadata = {
+        "model": config.model,
+        "objective": config.model_params["objective" if config.model == "lightgbm" else "loss_function"],
+        "model_params": config.model_params,
+        "selected_iterations": iterations,
+        "validation_origin_start": str(split.validation_start.date()),
+        "validation_origin_end": str(split.validation_end.date()),
+        "test_origin_start": str(split.test_start.date()),
+        "test_origin_end": str(split.test_end.date()),
+        "train_label_end": str(train["target_date"].max().date()),
+        "model_reused_for_test": True,
+        "series_count": len(cohort),
+        "train_rows": len(train),
+        "validation_rows": len(valid),
+        "test_rows": len(test),
+        "validation": valid_metrics,
+        "test": test_metrics,
+        "test_previous_week": regression_metrics(test_predictions["target_sales"], test_predictions["sales_same_weekday_last_week"]),
+        "test_four_week_same_weekday": regression_metrics(test_predictions["target_sales"], test_predictions["sales_same_weekday_4w_mean"]),
+    }
+    config.output_path.mkdir(parents=True, exist_ok=True)
+    config.model_path.mkdir(parents=True, exist_ok=True)
+    valid_predictions.to_csv(config.output_path / f"validation_predictions_{config.model}.csv", index=False)
+    test_predictions.to_csv(config.output_path / f"test_predictions_{config.model}.csv", index=False)
+    for phase, predictions in (("validation", valid_predictions), ("test", test_predictions)):
+        build_decision_summary(predictions).to_csv(config.output_path / f"{phase}_decision_summary_{config.model}.csv", index=False)
+    get_feature_importance(selection_model, columns).to_csv(config.output_path / f"feature_importance_{config.model}.csv", index=False)
+    joblib.dump(selection_model, config.model_path / f"{config.model}_h1-h7.joblib")
+    with (config.output_path / f"metrics_{config.model}.json").open("w", encoding="utf-8") as file:
+        json.dump(metadata, file, ensure_ascii=False, indent=2)
+    report(f"{config.model}: 검증 WAPE {valid_metrics['wape']:.2f}%, 테스트 WAPE {test_metrics['wape']:.2f}%")
+    return metadata

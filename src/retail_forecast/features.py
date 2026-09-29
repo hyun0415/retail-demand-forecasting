@@ -10,6 +10,7 @@ NON_FEATURE_COLUMNS = [
     "target_date",
     "seasonal_reference_date",
     "target_sales",
+    "target_onpromotion",
 ]
 
 

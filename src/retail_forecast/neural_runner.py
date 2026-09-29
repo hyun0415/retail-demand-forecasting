@@ -128,19 +128,23 @@ def run_neural_validation(
     batch_size: int = 32,
     windows_batch_size: int = 256,
     val_check_steps: int = 250,
+    train_end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     started = perf_counter()
     first_origin = template["date"].min()
-    train = training_before_origin(panel, first_origin)
-    if train["ds"].nunique() < input_size + 14:
-        raise ValueError("학습 이력이 입력 길이와 검증용 7일을 채우지 못합니다.")
+    if train_end is not None and train_end >= first_origin:
+        raise ValueError("학습 종료일은 첫 검증 기준일보다 이전이어야 합니다.")
+    train = training_before_origin(panel, first_origin) if train_end is None else panel.loc[panel["ds"].le(train_end)]
+    val_size = 7 if train_end is None else 0
+    if train["ds"].nunique() < input_size + val_size + 7:
+        raise ValueError("학습 이력이 입력 길이와 예측 길이를 채우지 못합니다.")
 
     model = NeuralForecast(
         models=[make_neural_model(name, input_size, max_steps, batch_size, windows_batch_size, val_check_steps)],
         freq="D",
     )
     tqdm.write(f"{name}: 학습 시작 ({len(train):,}행, {train['ds'].min().date()}~{train['ds'].max().date()})")
-    model.fit(df=train, val_size=7)
+    model.fit(df=train, val_size=val_size)
     progress = model.models[0].trainer_kwargs["callbacks"][0]
     full_epochs, extra_steps = divmod(progress.completed_steps, progress.steps_per_epoch)
     tqdm.write(
@@ -150,13 +154,48 @@ def run_neural_validation(
     )
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
-    loss_curve = pd.DataFrame(model.models[0].valid_trajectories, columns=["step", "val_mse"])
-    loss_curve.loc[loss_curve["step"] > 0].to_csv(
-        output_path / f"validation_loss_{name.lower()}.csv", index=False
-    )
+    if val_size:
+        loss_curve = pd.DataFrame(model.models[0].valid_trajectories, columns=["step", "val_mse"])
+        loss_curve.loc[loss_curve["step"] > 0].to_csv(
+            output_path / f"validation_loss_{name.lower()}.csv", index=False
+        )
     pd.DataFrame(model.models[0].train_trajectories, columns=["step", "train_mse_scaled"]).to_csv(
-        output_path / f"training_loss_{name.lower()}.csv", index=False
+        output_path / f"validation_training_loss_{name.lower()}.csv", index=False
     )
+
+    metrics = evaluate_neural_model(name, model, panel, series, template, output_path, input_size, "validation")
+    model_path = Path(model_path)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(path=str(model_path), save_dataset=False, overwrite=True)
+    tqdm.write(f"{name}: 결과 저장 완료 ({perf_counter() - started:.0f}초)")
+    return metrics
+
+
+def run_neural_test(
+    name: str,
+    panel: pd.DataFrame,
+    series: pd.DataFrame,
+    template: pd.DataFrame,
+    output_path: str | Path,
+    model_path: str | Path,
+    input_size: int = 56,
+) -> pd.DataFrame:
+    model = NeuralForecast.load(path=str(model_path))
+    return evaluate_neural_model(name, model, panel, series, template, output_path, input_size, "test")
+
+
+def evaluate_neural_model(
+    name: str,
+    model: NeuralForecast,
+    panel: pd.DataFrame,
+    series: pd.DataFrame,
+    template: pd.DataFrame,
+    output_path: str | Path,
+    input_size: int,
+    phase: str,
+) -> pd.DataFrame:
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     predictions = []
     origins = sorted(template["date"].unique())
@@ -169,11 +208,7 @@ def run_neural_validation(
 
     result = pd.concat(predictions, ignore_index=True)
     metrics, decisions = summarize_neural_predictions(result, name)
-    result.to_parquet(output_path / f"validation_predictions_{name.lower()}.parquet", index=False)
-    metrics.to_csv(output_path / f"metrics_{name.lower()}.csv", index=False)
-    decisions.to_parquet(output_path / f"decision_summary_{name.lower()}.parquet", index=False)
-    model_path = Path(model_path)
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save(path=str(model_path), save_dataset=False, overwrite=True)
-    tqdm.write(f"{name}: 결과 저장 완료 ({perf_counter() - started:.0f}초)")
+    result.to_parquet(output_path / f"{phase}_predictions_{name.lower()}.parquet", index=False)
+    metrics.to_csv(output_path / f"{phase}_metrics_{name.lower()}.csv", index=False)
+    decisions.to_parquet(output_path / f"{phase}_decision_summary_{name.lower()}.parquet", index=False)
     return metrics

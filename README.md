@@ -12,10 +12,10 @@ This project forecasts daily sales for each Favorita store and product family fr
 - **Comparison model:** CatBoost
 - **Model structure:** one global model with `forecast_horizon=1..7`
 - **Baselines:** previous-week daily profile and four-week same-weekday average
-- **Validation:** the latest 28 forecast-origin dates, with later labels purged from training
+- **Current Colab evaluation:** seven validation origins, a seven-day gap, and seven final test origins
 - **Metrics:** RMSLE, MAE, RMSE, WAPE, and Bias
 
-Features available at forecast origin `t` are shared across seven rows, while `forecast_horizon` changes from 1 to 7 to predict `t+1` through `t+7`. Target-date inputs are limited to promotions, calendar attributes, and holidays known in advance. Daily forecasts can be aggregated over the replenishment window of each product group.
+Features available at forecast origin `t` are shared across seven rows, while `forecast_horizon` changes from 1 to 7 to predict `t+1` through `t+7`. Target-date inputs are limited to calendar attributes known in advance; future observed promotion counts are excluded from model inputs. Daily forecasts can be aggregated over the replenishment window of each product group.
 
 Lag and rolling features are calculated from the full history. The historical baseline expands the latest 365 forecast-origin dates across horizons 1–7; the full-history Colab comparison uses all eligible origins. Training tables are cached as Parquet under `data/processed` and reused across model runs.
 
@@ -54,7 +54,7 @@ The pipeline combines:
 - 7-, 14-, and 28-day rolling sales averages;
 - previous-week sales and a four-week average for the same target weekday;
 - forecast horizon from 1 to 7;
-- target-date promotion, calendar, holiday, and event information;
+- known calendar and holiday information; current or past promotion counts;
 - store, family, and origin-date transactions.
 
 All sales rolling features are shifted by at least one day. Targets are joined by exact date, store, and family rather than generated through an unchecked row shift. Oil price is excluded because its relationship with daily store-family demand is difficult to justify clearly.
@@ -103,7 +103,22 @@ Use `configs/catboost.toml` for local CPU training and
 
 ## Colab GPU run
 
-Prepare the repository in My Drive with the separate 00 clone notebook, then open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. Notebook 05 mounts Drive and installs packages but does not clone or pull. It builds Parquet features in date chunks and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. LightGBM uses the prebuilt OpenCL GPU package (`device_type="gpu"`), so no CUDA compiler or source build is required. `MODEL_OVERRIDES` caps both models at 600 trees and sets CatBoost `gpu_ram_part=0.8`; both full-history and 365-day CatBoost GPU configs also use 0.8. `RUN_NAME` initially selects `full_history_l2_i600_opencl`, keeping the earlier CUDA results separate; change it when rerunning to preserve earlier outputs. Effective parameters and tree counts are saved with the metrics. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. A high-RAM runtime is recommended; future promotion values are valid only when the promotion plan is known at forecast time. Unexpected future event and earthquake features are excluded from this comparison.
+### Chronological Train / Valid / Test protocol (current notebooks)
+
+For the available Favorita history, the last eligible seven-day forecast origin is **2017-08-08**. Notebook 05 and notebook 07 now use the same complete store-family-origin-horizon rows:
+
+| Stage | Origin dates | Labels used for fitting | Purpose |
+|---|---|---|---|
+| Initial fit | Before validation | Target dates through 2017-07-18 | Select ML tree count and compare DL settings on validation |
+| Validation | 2017-07-19 to 2017-07-25 | No validation targets enter initial fit | Seven rolling daily origins, each predicting `t+1` to `t+7` |
+| Gap | 2017-07-26 to 2017-08-01 | No weight updates; observed sales may enter each origin's history | Ensures the last validation target is known before the first test origin |
+| Test | 2017-08-02 to 2017-08-08 | The validation-stage model stays fixed | Seven rolling daily origins, each predicting `t+1` to `t+7` |
+
+For ML, validation selects the best iteration by early stopping, and **that same fitted model** predicts test rows. For DL, each model is fitted once through July 18 using its chosen `MODEL_STEPS`, saved after validation, and loaded for test inference without another fit. These runs use external validation results rather than an additional internal seven-day holdout. At each forecast origin, lag/rolling features and DL history may use observed sales **through that origin only**. Thus later test origins have more observed history, while model weights remain fixed throughout validation and test. Both model families use the same seven-day output window and exact evaluation keys. Only series with all 49 validation and 49 test targets are kept in the common cohort. This does not require that every store-family has 56 nonzero sales days; a zero sale is an observed value, and globally missing dates are marked in the DL panel.
+
+The earlier 28-origin results included these proposed test dates and were repeatedly inspected. The new test week is therefore a **retrospective holdout**, not a previously untouched estimate of future generalization. Do not tune again on its score. Full training can be expensive; notebook 05 then 07 should be run only when ready for a fresh experiment. Results are written under the `full_history_time_split_fixed_i600` and `neural_time_split_fixed` names, preserving the older runs. If a DL step setting changes after reviewing validation, rerun that model's validation cell before test so the saved checkpoint matches the selected setting.
+
+Prepare the repository in My Drive with the separate 00 clone notebook, then open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. Notebook 05 mounts Drive and installs packages but does not clone or pull. It builds Parquet features in date chunks and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. LightGBM uses the prebuilt OpenCL GPU package (`device_type="gpu"`), so no CUDA compiler or source build is required. `MODEL_OVERRIDES` caps both models at 600 trees and sets CatBoost `gpu_ram_part=0.8`; both full-history and 365-day CatBoost GPU configs also use 0.8. `RUN_NAME` initially selects `full_history_time_split_fixed_i600`, keeping earlier results separate; change it when rerunning to preserve earlier outputs. Effective parameters and tree counts are saved with the metrics. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. A high-RAM runtime is recommended; future observed promotion counts are excluded from model features. Unexpected future event and earthquake features are excluded from this comparison.
 
 Every notebook prepares Seaborn and the bundled Nanum Gothic font near the top, then applies the Korean chart theme. Library cells contain imports, with utilities defined separately. Experiment parameters and execution follow.
 
@@ -111,9 +126,9 @@ Every notebook prepares Seaborn and the bundled Nanum Gothic font near the top, 
 
 [`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb) prepares NeuralForecast N-HiTS (MLP), TCN (CNN), and TFT (LSTM with attention) in a separate Colab notebook. It prepares the full daily input and provides full training cells for the three models in order. Run the model cells you need. The notebook installs the separate `requirements-neural.txt`.
 
-The notebook reads the ML validation predictions from `outputs/<ML_RUN_NAME>/validation_predictions_lightgbm.csv` and verifies 28 consecutive origins. Common prediction columns are `date` (origin), `target_date`, `forecast_horizon`, `store_nbr`, `family`, `target_sales`, and `prediction`. Full neural validation uses the exact ML evaluation rows. Training stops before the first validation origin; inference at each origin uses observed sales only through that date, plus known calendar fields. Missing raw dates have `available_mask=0`, distinct from observed zero sales. The neural models currently use fewer exogenous variables than ML, so performance differences also reflect different inputs.
+The notebook reads the ML validation and test predictions from `outputs/<ML_RUN_NAME>` and verifies seven consecutive validation origins and seven consecutive test origins. Common prediction columns are `date` (origin), `target_date`, `forecast_horizon`, `store_nbr`, `family`, `target_sales`, and `prediction`. Full neural validation and test use the exact corresponding ML evaluation rows. Training stops before the first validation origin; the saved model is loaded for test, and inference at each origin uses observed sales only through that date, plus known calendar fields. Missing raw dates have `available_mask=0`, distinct from observed zero sales. The neural models currently use fewer exogenous variables than ML, so performance differences also reflect different inputs.
 
-Neural predictions, metrics, and seven-day totals are saved under `outputs/neural_full`; the common-row comparison table is `outputs/neural_full/comparison_ml_dl.csv`. Model files are saved under `models/neural_full`. Full daily input is cached as Parquet under `data/processed`.
+Neural predictions, metrics, and seven-day totals are saved under `outputs/neural_time_split_fixed`; the test common-row comparison is `comparison_ml_dl_test.csv` there. Model files are saved under the matching `models` folder. Full daily input is cached as Parquet under `data/processed`.
 
 ### Previous 365-day CatBoost GPU run
 
