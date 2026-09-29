@@ -44,11 +44,13 @@ The following WAPEs are **draft figures supplied in this conversation** for the 
 |---|---:|---:|
 | LightGBM | **14.88%** | **10.70%** |
 | CatBoost | 16.77% | 11.96% |
+| Recent four-week same-weekday mean | 16.98% | 12.16% |
 | N-HiTS | 20.87% | 14.20% |
+| Previous-week same weekday | 23.21% | 16.99% |
 | TFT | 25.21% | 18.58% |
 | TCN | 28.59% | 22.08% |
 
-Exact run artifacts and settings should be stored alongside the final table. Daily over- and underforecasting can cancel in a seven-day sum. The earlier 365-origin LightGBM result used another training window, loss and split, and is documented separately in [metrics and results](../evaluation/README_EN.md).
+Against the strongest simple baseline, LightGBM reduces WAPE by about 12.4% daily and 12.0% on seven-day sums. Its Bias is still +6.44%, indicating aggregate overforecasting. Exact run artifacts and settings should accompany the final table. Daily over- and underforecasting can cancel in a seven-day sum. The earlier 365-origin LightGBM result used another training window, loss and split, and is documented separately in [metrics and results](../evaluation/README_EN.md).
 
 ## Validation and limits
 

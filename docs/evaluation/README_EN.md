@@ -29,13 +29,15 @@ The WAPE figures below are **draft documentation of results supplied by the user
 |---|---:|---:|---|
 | LightGBM | **14.88%** | **10.70%** | Lowest in both scopes in the submitted table |
 | CatBoost | 16.77% | 11.96% | Comparison using the same tabular inputs |
+| Recent four-week same-weekday mean | 16.98% | 12.16% | Strongest simple baseline on this Test |
 | N-HiTS | 20.87% | 14.20% | Lowest WAPE among the three neural models |
+| Previous-week same weekday | 23.21% | 16.99% | Simple weekly seasonal reference |
 | TFT | 25.21% | 18.58% | More training does not guarantee better final scores |
 | TCN | 28.59% | 22.08% | Larger weekly error under the current settings |
 
-Daily scoring compares each `t+h` target separately. Seven-day scoring **first sums the seven actuals and seven predictions within each store-family-origin**, then compares those totals. Errors on different days may cancel in the sum. Daily, horizon-level and Bias results remain necessary. ML and DL also use different input features, so the ranking cannot be attributed to architecture alone.
+Against the strongest simple baseline, LightGBM reduces WAPE by about **12.4%** daily and **12.0%** for seven-day sums. CatBoost's gain is smaller, and all three neural models have higher WAPE than this baseline. LightGBM Bias remains **+6.44%**. Daily scoring compares each `t+h` target separately. Seven-day scoring **first sums the seven actuals and seven predictions within each store-family-origin**, then compares those totals. Errors on different days may cancel in the sum. Daily, horizon-level and Bias results remain necessary. ML and DL also use different input features, so the ranking cannot be attributed to architecture alone.
 
-The Test week was inspected in earlier experiments. The table is a **retrospective comparison**, and further tuning against it would weaken the separation between model selection and evaluation. Store/family error inspection exists in the [06 notebook](../../notebooks/06_error_analysis.ipynb); demand-segment error analysis and operational views remain planned.
+The Test week was inspected in earlier experiments. The table is a **retrospective comparison**, and further tuning against it would weaken the separation between model selection and evaluation. The [08 decision analysis notebook](../../notebooks/08_model_evaluation_and_decision.ipynb) reads saved Valid/Test predictions to compare baselines, inspect store/family/horizon/demand-level errors and list weekly review cases. It does not retrain models or measure realized allocation gains.
 
 ## Historical result, kept separate
 
