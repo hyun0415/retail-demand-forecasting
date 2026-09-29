@@ -134,8 +134,13 @@ def run_neural_validation(
     first_origin = template["date"].min()
     if train_end is not None and train_end >= first_origin:
         raise ValueError("학습 종료일은 첫 검증 기준일보다 이전이어야 합니다.")
-    train = training_before_origin(panel, first_origin) if train_end is None else panel.loc[panel["ds"].le(train_end)]
-    val_size = 7 if train_end is None else 0
+    if train_end is None:
+        train = training_before_origin(panel, first_origin)
+    else:
+        if first_origin != train_end + pd.Timedelta(days=1) or template["date"].max() != train_end + pd.Timedelta(days=7):
+            raise ValueError("내부 검증 기간은 첫 검증 기준일부터 연속 7일이어야 합니다.")
+        train = panel.loc[panel["ds"].le(train_end + pd.Timedelta(days=7))]
+    val_size = 7
     if train["ds"].nunique() < input_size + val_size + 7:
         raise ValueError("학습 이력이 입력 길이와 예측 길이를 채우지 못합니다.")
 
@@ -143,7 +148,11 @@ def run_neural_validation(
         models=[make_neural_model(name, input_size, max_steps, batch_size, windows_batch_size, val_check_steps)],
         freq="D",
     )
-    tqdm.write(f"{name}: 학습 시작 ({len(train):,}행, {train['ds'].min().date()}~{train['ds'].max().date()})")
+    gradient_end = train["ds"].max() - pd.Timedelta(days=val_size)
+    tqdm.write(
+        f"{name}: 학습 시작 ({len(train):,}행, 학습 정답 ~{gradient_end.date()}, "
+        f"내부 검증 {(gradient_end + pd.Timedelta(days=1)).date()}~{train['ds'].max().date()})"
+    )
     model.fit(df=train, val_size=val_size)
     progress = model.models[0].trainer_kwargs["callbacks"][0]
     full_epochs, extra_steps = divmod(progress.completed_steps, progress.steps_per_epoch)
@@ -154,11 +163,10 @@ def run_neural_validation(
     )
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
-    if val_size:
-        loss_curve = pd.DataFrame(model.models[0].valid_trajectories, columns=["step", "val_mse"])
-        loss_curve.loc[loss_curve["step"] > 0].to_csv(
-            output_path / f"validation_loss_{name.lower()}.csv", index=False
-        )
+    loss_curve = pd.DataFrame(model.models[0].valid_trajectories, columns=["step", "val_mse"])
+    loss_curve.loc[loss_curve["step"] > 0].to_csv(
+        output_path / f"validation_loss_{name.lower()}.csv", index=False
+    )
     pd.DataFrame(model.models[0].train_trajectories, columns=["step", "train_mse_scaled"]).to_csv(
         output_path / f"validation_training_loss_{name.lower()}.csv", index=False
     )
