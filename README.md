@@ -1,193 +1,76 @@
-# Retail Demand Forecasting
+# Favorita 매장·상품군 수요예측
 
-This project forecasts daily sales for each Favorita store and product family from one to seven days ahead. Its primary use case is company-wide, store-level demand planning to inform replenishment and allocation; store teams can review their own forecasts. Promotion analysis is a related use case.
+**다음 1주일에 어느 매장·상품군에서 얼마나 팔릴까?** Corporación Favorita의 판매 기록으로 예측 기준일 `t`에서 `t+1`~`t+7`의 일별 판매량을 예측하고, 7일 합계를 본사의 상품군별 수요·물량 배분 검토에 연결하는 프로젝트입니다. 개별 상품 발주 추천으로 확장하려면 SKU별 판매·재고 데이터가 추가로 필요합니다.
 
-[한국어 README](README_KR.md)
+[English](docs/en/README.md) · [데이터·도메인](docs/domain/README.md) · [예측 방법](docs/method/README.md) · [평가와 결과](docs/evaluation/README.md) · [노트북 실행 안내](notebooks/README.md)
 
-## Problem definition
+## 예측 단위와 현업 활용
 
-- **Prediction unit:** store × product family × target date
-- **Target:** non-negative daily sales from one to seven days ahead
-- **Main model:** LightGBM
-- **Comparison model:** CatBoost
-- **Model structure:** one global model with `forecast_horizon=1..7`
-- **Baselines:** previous-week daily profile and four-week same-weekday average
-- **Current Colab evaluation:** seven validation origins, a seven-day gap, and seven final test origins
-- **Metrics:** RMSLE, MAE, RMSE, WAPE, and Bias
+1주일 단위로 발주와 물량 배분을 검토하는 **운영 시나리오**를 가정했습니다. 데이터에 실제 기업의 발주 주기가 기록된 것은 아닙니다. 일별 예측은 요일별 수요 변화를 보여주고, 7일 합계는 다음 검토 주기의 수요 규모를 보여줍니다. 예측 단위는 **매장 × 상품군 × 목표일**이며 개별 SKU는 아닙니다.
 
-Features available at forecast origin `t` are shared across seven rows, while `forecast_horizon` changes from 1 to 7 to predict `t+1` through `t+7`. Target-date inputs are limited to calendar attributes known in advance; future observed promotion counts are excluded from model inputs. Daily forecasts can be aggregated over the replenishment window of each product group.
+### 왜 개별 상품을 예측하지 않았나
 
-Lag and rolling features are calculated from the full history. The historical baseline expands the latest 365 forecast-origin dates across horizons 1–7; the full-history Colab comparison uses all eligible origins. Training tables are cached as Parquet under `data/processed` and reused across model runs.
+현재 사용하는 `train.csv`에는 날짜·매장·**상품군**별 판매량이 있고 SKU 식별자와 개별 상품의 정답은 없습니다. 이 데이터로 SKU별 예측 성능을 검증할 수 없으므로, 실제로 관측되는 상품군 판매량을 목표로 삼았습니다. 상품군 합계는 매장별 주간 수요 규모를 보여주지만 내부의 SKU별 판매 비율이나 주문 수량을 알려주지는 않습니다. 신상품·교체가 잦은 상품은 이력 부족까지 별도로 다뤄야 합니다. 자세한 내용은 [SKU와 상품군 예측의 차이](docs/domain/README.md#상품군-예측은-어디에-의미가-있는가)에 있습니다.
 
-## Business use and SCM boundary
+### 현업 의사결정에 주는 참고자료
 
-One global model learns from all stores, but produces a separate daily forecast for each **store × product family**. The seven daily forecasts from origin `t` can be summed into projected sales for `t+1` through `t+7`. Forecasts and aggregate metrics are implemented; the role-specific views below are the intended interpretation work.
-
-| User | Decision supported | View to develop |
-|---|---|---|
-| Central demand and replenishment team | Compare expected demand across stores and families; prioritize review and allocation planning | Store-family daily forecasts, seven-day totals, and error by store or demand segment |
-| Store team | Review the local forecast and flag unusual demand before replenishment decisions | Forecasts and exceptions filtered to that store |
-| Marketing team | Examine how demand patterns and forecast errors vary around planned promotions | Descriptive store-family and promotion comparisons; no causal lift estimate |
-
-This is an **input to supply-chain planning**, not an automated purchase-order system. The data is at product-family level and does not provide SKU-level stock on hand, incoming inventory, supplier lead times, pack sizes, or service-level rules needed to calculate order quantities. Observed sales may also fall below unconstrained demand when items are out of stock. Therefore, the project reports forecast accuracy and decision-relevant demand patterns, not measured savings, prevented stockouts, or optimal orders. These boundaries also guide the planned store and demand-segment error analysis.
-
-## Data
-
-Download the files from Kaggle's [Store Sales - Time Series Forecasting](https://www.kaggle.com/competitions/store-sales-time-series-forecasting/data) competition and place them in `data/raw`.
-
-Required files:
-
-```text
-train.csv
-stores.csv
-holidays_events.csv
-transactions.csv
-```
-
-The raw data is excluded from Git because it is distributed under the Kaggle competition rules.
-
-## Method
-
-The pipeline combines:
-
-- origin sales and sales lags at 1, 7, 14, 28, and 56 days;
-- 7-, 14-, and 28-day rolling sales averages;
-- previous-week sales and a four-week average for the same target weekday;
-- forecast horizon from 1 to 7;
-- known calendar and holiday information; current or past promotion counts;
-- store, family, and origin-date transactions.
-
-All sales rolling features are shifted by at least one day. Targets are joined by exact date, store, and family rather than generated through an unchecked row shift. Oil price is excluded because its relationship with daily store-family demand is difficult to justify clearly.
-
-**Selection rationale:** The seven-day pattern observed in EDA motivates the [previous-week and four-week same-weekday baselines](notebooks/03_baseline_model.ipynb). A table of [feature groups, reference dates, and availability conditions](notebooks/04_feature_engineering.ipynb) documents the model inputs.
-
-## Repository structure
-
-```text
-configs/                 Experiment settings
-data/raw/                Kaggle source files, not tracked
-models/                  Trained models, not tracked
-outputs/                 Metrics and validation results, not tracked
-scripts/run_experiment.py
-src/retail_forecast/     Data, features, models, and pipeline
-notebooks/01_eda.ipynb
-notebooks/03_baseline_model.ipynb
-notebooks/04_feature_engineering.ipynb
-notebooks/05_colab_model_comparison.ipynb
-notebooks/06_error_analysis.ipynb
-notebooks/07_dl_colab_validation.ipynb
-requirements-neural.txt    Separate NeuralForecast dependencies
-tests/                   Leakage and metric tests
-```
-
-## Run
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .
-python scripts/run_experiment.py --config configs/baseline.toml
-python scripts/run_experiment.py --config configs/catboost.toml
-python scripts/run_permutation_importance.py --config configs/baseline.toml
-```
-
-Rebuild the Parquet feature cache only after changing feature definitions or the training window:
-
-```bash
-python scripts/run_experiment.py --config configs/baseline.toml --rebuild-features
-```
-
-Use `configs/catboost.toml` for local CPU training and
-`configs/catboost_gpu.toml` for NVIDIA GPU training.
-
-## Colab GPU run
-
-### Chronological Train / Valid / Test protocol (current notebooks)
-
-For the available Favorita history, the last eligible seven-day forecast origin is **2017-08-08**. Notebook 05 and notebook 07 now use the same complete store-family-origin-horizon rows:
-
-| Stage | Origin dates | Labels used for fitting | Purpose |
+| 현업 담당자 | 궁금한 질문 | 현재 예측·분석에서 얻는 정보 | 활용할 수 있는 판단 |
 |---|---|---|---|
-| Initial fit | Before validation | Target dates through 2017-07-18 | Select ML tree count and compare DL settings on validation |
-| Validation | 2017-07-19 to 2017-07-25 | No validation targets enter initial fit | Seven rolling daily origins, each predicting `t+1` to `t+7` |
-| Gap | 2017-07-26 to 2017-08-01 | No weight updates; observed sales may enter each origin's history | Ensures the last validation target is known before the first test origin |
-| Test | 2017-08-02 to 2017-08-08 | The validation-stage model stays fixed | Seven rolling daily origins, each predicting `t+1` to `t+7` |
+| 본사 수요계획 | 다음 주 어느 매장·상품군의 수요가 큰가? | 매장·상품군별 1~7일 일별 예측과 주간 합계 | 주간 수요 계획에서 먼저 검토할 대상 선정 |
+| 물량 배분 | 같은 상품군의 예상 수요가 매장마다 어떻게 다른가? | 매장 간 7일 예상 수요 비교 | 공급·재고 제약을 확인하기 전 배분 검토 우선순위 설정 |
+| 점포 운영 | 우리 매장의 다음 주 상품군별 수요 흐름은 어떤가? | 해당 점포의 일별 예측과 7일 합계 | 특이 수요를 확인하고 본사와 공유; SKU 발주량은 별도 계산 |
+| 마케팅 | 행사 기간에 수요 패턴이 어떻게 달라졌는가? | 판매·판촉 기록의 EDA와 예측 오류를 결합한 **후속 분석 가능** | 검토할 매장·상품군 선정; 판촉 인과 효과는 추정하지 않음 |
+| 수요 분석 | 예측이 어느 구간에서 자주 빗나가는가? | 전체·horizon별 오류, 7일 합계 성능과 Bias | 큰 오차나 지속적 과소예측을 우선 조사 |
 
-For ML, validation selects the best iteration by early stopping, and **that same fitted model** predicts test rows. For DL, each model trains on labels through July 18 using its chosen `MODEL_STEPS`. Its seven-day internal validation uses July 19–25 **for monitoring MSE only**, with no gradient updates on those labels; the rolling-origin external validation also scores horizons reaching August 1. Internal MSE is printed every `VAL_CHECK_STEPS` and saved as `validation_loss_<model>.csv`. The saved model is loaded for test inference without another fit. At each forecast origin, lag/rolling features and DL history may use observed sales **through that origin only**. Thus later test origins have more observed history, while model weights remain fixed throughout validation and test. Both model families use the same seven-day output window and exact evaluation keys. Only series with all 49 validation and 49 test targets are kept in the common cohort. This does not require that every store-family has 56 nonzero sales days; a zero sale is an observed value, and globally missing dates are marked in the DL panel.
+현재 산출물은 **의사결정의 참고자료**입니다. 실제 배분량이나 SKU 발주량을 결정하려면 재고, 입고 예정, 공급 가능량, 납기와 발주 단위가 필요합니다. 위 표의 마케팅 결합 분석과 수요군별 오류 시각화는 완료 결과가 아니라 후속 작업입니다.
 
-The earlier 28-origin results included these proposed test dates and were repeatedly inspected. The new test week is therefore a **retrospective holdout**, not a previously untouched estimate of future generalization. Do not tune again on its score. Full training can be expensive; notebook 05 then 07 should be run only when ready for a fresh experiment. The ML run is `full_history_time_split_fixed_i600`; the DL run with internal loss monitoring is `neural_time_split_val_loss`, preserving the older results. If a DL step setting changes after reviewing validation, rerun that model's validation cell before test so the saved checkpoint matches the selected setting.
+## 핵심 설계
 
-Prepare the repository in My Drive with the separate 00 clone notebook, then open [`notebooks/05_colab_model_comparison.ipynb`](notebooks/05_colab_model_comparison.ipynb) in Colab. Notebook 05 mounts Drive and installs packages but does not clone or pull. It builds Parquet features in date chunks and trains LightGBM with L2 `regression` and CatBoost with `RMSE` on the same temporal split. LightGBM uses the prebuilt OpenCL GPU package (`device_type="gpu"`), so no CUDA compiler or source build is required. `MODEL_OVERRIDES` caps both models at 600 trees and sets CatBoost `gpu_ram_part=0.8`; both full-history and 365-day CatBoost GPU configs also use 0.8. `RUN_NAME` initially selects `full_history_time_split_fixed_i600`, keeping earlier results separate; change it when rerunning to preserve earlier outputs. Effective parameters and tree counts are saved with the metrics. Feature chunks and model iterations show progress bars, with stage timings and validation scores retained. Place the untracked Kaggle CSV files in `data/raw` after cloning. A high-RAM runtime is recommended; future observed promotion counts are excluded from model features. Unexpected future event and earthquake features are excluded from this comparison.
+| 문제에서 출발한 질문 | 선택한 방법 | 이유 |
+|---|---|---|
+| 다음 주 수요를 어떻게 표현할까? | 기준일마다 1~7일 후를 예측하고 7일을 합산 | 일별 변동과 주간 물량을 함께 확인하기 위해 |
+| 단순한 비교 기준은 무엇일까? | 전주 동일 요일, 최근 4주 동일 요일 평균 | [EDA](notebooks/01_eda.ipynb)에서 관찰한 주간 반복 패턴을 반영하기 위해 |
+| 여러 매장의 정보를 어떻게 활용할까? | 전역 LightGBM·CatBoost와 N-HiTS·TCN·TFT 비교 | 표형 Feature와 연속 시계열 입력의 장단점을 같은 평가 행에서 보기 위해 |
+| 미래 정보를 어떻게 차단할까? | 기준일에 확인 가능한 이력과 사전에 아는 달력 정보만 사용 | 실제 예측 때 사용할 수 없는 값으로 성능을 높이지 않기 위해 |
+| 성능은 어떻게 확인할까? | 시간 순서의 Train·Valid·간격·Test 분할 | 설정 선택과 최종 평가의 역할을 분리하기 위해 |
 
-Every notebook prepares Seaborn and the bundled Nanum Gothic font near the top, then applies the Korean chart theme. Library cells contain imports, with utilities defined separately. Experiment parameters and execution follow.
+ML 모델은 기준일 `t`의 Feature를 공유하는 7개 행에 `forecast_horizon=1~7`을 각각 넣습니다. DL 모델은 과거 56일 입력에서 다음 7일을 한 번에 출력합니다. 두 방식 모두 **목표일의 실제 판매량은 입력하지 않습니다.** 모델별 입력 Feature가 완전히 동일하지 않으므로 성능 차이를 모델 구조만의 효과로 해석하지 않습니다. 세부 입력과 모델 선정 이유는 [예측 방법](docs/method/README.md)에 정리했습니다.
 
-### Neural GPU validation
+## 최근 제출 결과
 
-[`07_dl_colab_validation.ipynb`](notebooks/07_dl_colab_validation.ipynb) prepares NeuralForecast N-HiTS (MLP), TCN (CNN), and TFT (LSTM with attention) in a separate Colab notebook. It prepares the full daily input and provides full training cells for the three models in order. Run the model cells you need. The notebook installs the separate `requirements-neural.txt`.
+아래는 대화에서 제출한 **최근 공통 Test 비교 결과의 WAPE**입니다. Test 기준일은 2017-08-02~08, 매장·상품군·기준일·horizon을 맞춰 평가했습니다. 값이 낮을수록 전체 판매량 대비 절대오차가 작습니다.
 
-The notebook reads the ML validation and test predictions from `outputs/<ML_RUN_NAME>` and verifies seven consecutive validation origins and seven consecutive test origins. Common prediction columns are `date` (origin), `target_date`, `forecast_horizon`, `store_nbr`, `family`, `target_sales`, and `prediction`. Full neural validation and test use the exact corresponding ML evaluation rows. Training stops before the first validation origin; the saved model is loaded for test, and inference at each origin uses observed sales only through that date, plus known calendar fields. Missing raw dates have `available_mask=0`, distinct from observed zero sales. The neural models currently use fewer exogenous variables than ML, so performance differences also reflect different inputs.
-
-Neural predictions, metrics, loss curves, and seven-day totals are saved under `outputs/neural_time_split_val_loss`; the test common-row comparison is `comparison_ml_dl_test.csv` there. Model files are saved under the matching `models` folder. Full daily input is cached as Parquet under `data/processed`.
-
-### Previous 365-day CatBoost GPU run
-
-Place the following untracked feature cache in the cloned repository:
-
-```text
-data/processed/features_h1-7_d365_l1-7-14-28-56_r7-14-28.parquet
-```
-
-It contains the multi-horizon training table generated for the latest 365
-forecast-origin dates. When this file is present, the raw CSV files and
-`--rebuild-features` are not required.
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-python scripts/run_experiment.py --config configs/catboost_gpu.toml
-```
-
-Copy `models` and `outputs` to persistent storage before the Colab runtime is
-released. GPU training can vary slightly between runs because floating-point
-reduction order is non-deterministic.
-
-Generated artifacts:
-
-- `models/<model>_h1-h7.joblib`
-- `outputs/metrics_<model>.json`
-- `outputs/metrics_by_horizon_<model>.csv`
-- `outputs/validation_predictions_<model>.csv`
-- `outputs/decision_summary_<model>.csv` (daily `h1..h7` forecasts and 1–3/1–7 day sums)
-- `outputs/feature_importance_<model>.csv`
-- `outputs/permutation_importance.csv`
-
-## Current multi-horizon result
-
-This historical LightGBM L1 result was trained on the latest 365 forecast-origin
-dates and evaluated on the latest 28 origins. The 365-day configs retain their
-original objectives for reproducibility; notebook 05 uses the full-history L2 configs.
-
-| Model | RMSLE | MAE | WAPE | Bias |
-|---|---:|---:|---:|---:|
-| Previous-week same weekday | 0.5430 | 85.09 | 17.96% | 0.91% |
-| Four-week same-weekday mean | 0.4617 | 69.92 | 14.76% | 0.83% |
-| LightGBM | **0.3943** | **62.84** | **13.26%** | **-0.86%** |
-
-Negative Bias indicates aggregate underforecasting; positive Bias indicates
-aggregate overforecasting.
-
-## Previous single-horizon baseline result
-
-The first full-data run used 2,831,598 training rows and 49,896 validation rows. Validation covered the latest 28 target dates beginning on July 19, 2017.
-
-| Model | RMSLE | MAE |
+| 모델 | 일별 WAPE ↓ | 7일 합계 WAPE ↓ |
 |---|---:|---:|
-| Seven-day seasonal naive | 0.5468 | 86.93 |
-| LightGBM | **0.4079** | **66.58** |
+| LightGBM | **14.88%** | **10.70%** |
+| CatBoost | 16.77% | 11.96% |
+| N-HiTS | 20.87% | 14.20% |
+| TFT | 25.21% | 18.58% |
+| TCN | 28.59% | 22.08% |
 
-LightGBM reduced RMSLE by 25.4% and MAE by 23.4% relative to the seasonal baseline. These figures belong to the previous single `t+7` experiment and are not directly comparable with the new 1-to-7-day global model. The multi-horizon run will report overall and horizon-specific metrics.
+이 표는 **사용자가 제출한 최근 실행 결과를 옮긴 초안**입니다. 실행 산출물과 정확한 설정을 함께 보관한 뒤 최종 수치로 확정합니다. 7일 합계에서는 일별 과대·과소예측이 상쇄될 수 있어 일별 성능도 함께 봅니다. 이전 365일 학습 실험의 13.26% WAPE와는 분할·입력·목적함수가 달라 직접 비교하지 않습니다. 지표의 의미와 과거 실험 기록은 [평가와 결과](docs/evaluation/README.md)에 있습니다.
 
-## Scope
+## 검증과 해석 범위
 
-The first version focuses on reproducible forecasting and leakage-safe validation. API serving, monitoring, orchestration, and TabFM are intentionally deferred. TabFM can later be evaluated as a zero-shot comparison on the same engineered table without changing the main experiment.
+| 단계 | 예측 기준일 | 역할 |
+|---|---|---|
+| Train | 정답 날짜가 2017-07-18까지 | 모델 가중치 학습 |
+| Valid | 2017-07-19~25 | 학습 종료 시점·설정 선택 |
+| 간격 | 2017-07-26~08-01 | Valid의 마지막 `t+7` 정답과 Test 첫 기준일 사이 확보 |
+| Test | 2017-08-02~08 | 선택한 모델을 재학습하지 않고 평가 |
+
+Test 주간은 이전 실험에서도 확인했으므로 **완전히 처음 보는 최종 평가 구간은 아닙니다.** 현재 결과는 회고적 비교로 해석합니다. 과거 판매 기록에는 품절로 관측되지 않은 수요가 있을 수 있고, 현재 데이터에는 SKU별 판매·재고·입고 예정·공급 납기·발주 단위가 없어 개별 상품의 최적 발주량이나 재고 절감 효과를 검증할 수 없습니다.
+
+확장할 때는 SKU별 판매 데이터를 확보해 예측을 별도로 검증한 뒤 재고·공급 제약을 결합해 발주 추천량을 계산할 수 있습니다. 날씨처럼 계절 수요에 영향을 주는 외부 정보와 **예측 시점에 일정이 알려진** 지역 행사·판촉 정보도 검토 대상입니다. 수요 군집별 오류 분석과 운영 시각화는 후속 작업이며 현재 결과로 제시하지 않습니다.
+
+## 문서와 실행
+
+| 문서 | 내용 |
+|---|---|
+| [데이터·도메인](docs/domain/README.md) | 데이터 의미, EDA 근거, 활용·한계, 군집 계획 |
+| [예측 방법](docs/method/README.md) | Baseline·Feature·모델 원리·시계열 분할·누수 점검 |
+| [평가와 결과](docs/evaluation/README.md) | 지표별 계산·해석, 최신 결과와 과거 실험 구분 |
+| [노트북 실행 안내](notebooks/README.md) | 현재 있는 노트북의 역할과 Colab 실행 순서 |
+| [English overview](docs/en/README.md) | 영어 요약과 영어 세부 문서 링크 |
+
+원본 데이터는 Kaggle [Store Sales - Time Series Forecasting](https://www.kaggle.com/competitions/store-sales-time-series-forecasting/data)에서 받아 `data/raw`에 배치합니다. 원본과 생성된 대용량 파일은 Git에 포함하지 않습니다. 전체 GPU 학습은 오래 걸리므로 [실행 안내](notebooks/README.md)를 확인한 뒤 필요할 때만 수행합니다.
