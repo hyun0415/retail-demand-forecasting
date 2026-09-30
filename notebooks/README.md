@@ -7,7 +7,7 @@
 | 노트북 | 역할 | 상태 |
 |---|---|---|
 | [01_eda.ipynb](01_eda.ipynb) | 판매 규모·0 판매·요일성·판촉 기술 통계 | 현재 파일 있음 |
-| [02_demand_segments.ipynb](02_demand_segments.ipynb) | Valid 이전 180일의 매장·상품군 수요 패턴 군집과 해석 | 현재 파일 있음; CPU 분석 |
+| [02_demand_segments.ipynb](02_demand_segments.ipynb) | Valid 이전 180일의 판매 행동 5개 특성으로 군집; 판촉 비율은 사후 설명용 | 현재 파일 있음; CPU 분석 |
 | [03_baseline_model.ipynb](03_baseline_model.ipynb) | 전주 동일 요일·최근 4주 동일 요일 평균 | 현재 파일 있음 |
 | [04_feature_engineering.ipynb](04_feature_engineering.ipynb) | Feature 생성과 사용 가능 시점 점검 | 현재 파일 있음 |
 | [05_colab_model_comparison.ipynb](05_colab_model_comparison.ipynb) | 전체 이력 LightGBM·CatBoost GPU 학습과 Valid/Test 결과 저장 | 현재 파일 있음 |
@@ -21,7 +21,7 @@
 ## Colab 실행 순서
 
 1. 별도로 사용하는 `00` clone 노트북으로 저장소를 `/content/drive/MyDrive/retail-demand-forecasting`에 준비하고, [Kaggle 원본 데이터](https://www.kaggle.com/competitions/store-sales-time-series-forecasting/data)의 `train.csv`, `stores.csv`, `holidays_events.csv`, `transactions.csv`를 `data/raw`에 배치합니다. `00` 파일은 현재 저장소에 포함되지 않습니다.
-2. **01**에서 판매 분포와 주간 패턴을 탐색하고, **02**에서 180일 이력을 요약해 `outputs/demand_segments/segment_features.parquet`에 군집 결과를 저장합니다. 02는 `train.csv`가 필요하지만 GPU 학습은 하지 않습니다.
+2. **01**에서 판매 규모와 주간 패턴을 탐색하고, **02**에서 180일 이력을 요약해 `outputs/demand_segments/segment_features.parquet`에 군집 결과를 저장합니다. 군집 입력에서 판촉 비율을 제외했으므로 이전 02 결과가 있으면 **02를 다시 실행**한 뒤 08과 연결합니다. 02는 `train.csv`가 필요하지만 GPU 학습은 하지 않습니다.
 3. GPU와 충분한 CPU RAM을 갖춘 Colab에서 **05**를 실행합니다. 05는 저장소를 clone·pull하지 않습니다. 전체 이력 Feature를 Parquet으로 만들고, `RUN_NAME=full_history_time_split_fixed_i600` 아래에 ML 모델·Valid/Test 예측·지표를 저장합니다.
 4. **07**의 `ML_RUN_NAME`이 05의 `RUN_NAME`과 같은지 확인하고 실행합니다. 07은 05의 ML 예측 파일로 공통 평가 행을 구성합니다. DL의 `MODEL_STEPS`·`VAL_CHECK_STEPS`는 노트북 상단에서 설정하며 모델별 검증 손실과 예측 결과를 `neural_time_split_val_loss` 실행 폴더에 저장합니다.
 5. **08**에서 두 실행 이름을 맞춘 뒤 저장된 Valid/Test 예측으로 다섯 모델과 기준선을 같은 행에서 비교합니다. 02의 군집 파일이 있으면 군집별 LightGBM·4주 기준선의 7일 WAPE와 Bias도 표시합니다. Test는 이미 확인한 구간이므로 대체 규칙 결과는 탐색적으로 해석합니다.

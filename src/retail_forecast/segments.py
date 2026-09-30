@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 SERIES_KEYS = ["store_nbr", "family"]
 CLUSTER_COLUMNS = [
     "log_mean_sales", "zero_share", "log_cv", "log_weekday_cv",
-    "trend_log", "promo_day_share",
+    "trend_log",
 ]
 
 
